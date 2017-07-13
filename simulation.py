@@ -1,6 +1,6 @@
 #!/usr/bin/env python2.7
 
-import sys
+import sys, os
 import argparse
 
 from mininet.net import Mininet
@@ -67,6 +67,7 @@ def eval_arsa(N, config):
         sources[i].cmd('sleep %d && %s &' % (i * config.gap + 1, send_cmd))
 
     CLI(net)
+    os.system('pkill "iperf3*"')
     net.stop()
 
 if __name__ == '__main__':
