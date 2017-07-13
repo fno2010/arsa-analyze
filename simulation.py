@@ -20,7 +20,7 @@ def create_access_link(net, n1, n2, config):
                        delay="2us", # 2us
                        max_queue_size=10000) # sufficiently large queue size
 
-SND_CMD = "iperf3 -c %s -i 0.1 -t %d -C %s> %d.log"
+SND_CMD = "iperf3 -c %s -i 0.1 -t %d -C %s -f k > %d.log"
 
 def eval_arsa(N, config):
     """
