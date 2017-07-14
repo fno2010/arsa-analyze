@@ -13,11 +13,11 @@ The format of ewma_params like: com=0.5 span=1
 Accepted ewma_params: com, span, halflife, min_periods
 
 The format of the csv_file should be whitespace separated
-csv with the header line "testcase time window".
+csv without the header line. The columns in order are the
+number of testcase, time since start and the value.
 
 For example:
 
-testcase time window
 2 0.1 19.8
 2 0.2 31.1
 2 0.3 42.4
@@ -32,7 +32,8 @@ if __name__ == '__main__':
         sys.exit(-1)
 
     filename = sys.argv[1]
-    data = pandas.read_csv(filename, sep='\s+')
+    data = pandas.read_csv(filename, sep='\s+',
+                           names=['testcase', 'time', 'value'])
     testcases = set(data['testcase'])
 
     figure(figsize=(12, 4), dpi=300)
@@ -49,9 +50,10 @@ if __name__ == '__main__':
     for t in testcases:
         data_t = data[data['testcase'] == t]
         time = data_t['time']
-        window_size = data_t['window']
+        value = data_t['value']
+        sys.stdout.write('Average of case no. %d: %f\n' % (t, value.mean()))
         if ewma:
-            window_size = window_size.ewm(**ewma_params).mean()
-        plot(time, window_size)
+            value = value.ewm(**ewma_params).mean()
+        plot(time, value)
 
     savefig(''.join(filename.split('.')[:-1]) + '.png')

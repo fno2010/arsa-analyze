@@ -1,0 +1,20 @@
+version: "3"
+
+services:
+  mininet:
+    image: fno2010/mininet
+    hostname: mn
+    container_name: mn
+    network_mode: host
+    privileged: true
+    stdin_open: true
+    tty: true
+    environment:
+      MININET_SCRIPT: /data/simulation.py
+      MININET_SCRIPT_OPTIONS: '3 --duration 60'
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    volumes:
+      - /lib/modules:/lib/modules
+      - ./:/data
