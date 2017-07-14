@@ -37,8 +37,12 @@ if __name__ == '__main__':
 
     figure(figsize=(12, 4), dpi=300)
 
+    ewma = True
     if len(sys.argv) > 2:
-        ewma_params = {x.split('=')[0]: float(x.split('=')[1]) for x in sys.argv[2:]}
+        if '-noewma' in sys.argv[2:]:
+            ewma = False
+        ewma_params = {x.split('=')[0]: float(x.split('=')[1])
+                       for x in sys.argv[2:] if not x.startswith('-')}
     else:
         ewma_params = DEFAULT_EWMA_PARAMS
 
@@ -46,7 +50,8 @@ if __name__ == '__main__':
         data_t = data[data['testcase'] == t]
         time = data_t['time']
         window_size = data_t['window']
-        window_size_emwa = window_size.ewm(**ewma_params).mean()
-        plot(time, window_size_emwa)
+        if ewma:
+            window_size = window_size.ewm(**ewma_params).mean()
+        plot(time, window_size)
 
     savefig(''.join(filename.split('.')[:-1]) + '.png')
