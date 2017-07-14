@@ -1,76 +1,22 @@
 #!/usr/bin/env python2.7
 
-import sys, os
+import sys
 import argparse
 
-from mininet.net import Mininet
-from mininet.node import OVSKernelSwitch, OVSController
-from mininet.link import TCLink
-from mininet.log import info, setLogLevel
-from mininet.cli import CLI
+from mininet.log import error, setLogLevel
 
-def create_bottleneck_link(net, n1, n2, config):
-    return net.addLink(n1, n2,
-                       bw=config.bw,
-                       delay=config.delay,
-                       max_queue_size=config.queue_size)
-
-def create_access_link(net, n1, n2, config):
-    return net.addLink(n1, n2,
-                       bw=1000, # 1000 Mbps = 1 Gbps
-                       delay="2us", # 2us
-                       max_queue_size=10000) # sufficiently large queue size
-
-SND_CMD = "iperf3 -c %s -i 0.1 -t %d -C %s -f k > %d.log"
+from testcase import single_bottleneck_link, simple_linear
 
 def eval_arsa(N, config):
     """
-    Evaluate ARSA in the following topology:
-
-        src0 --                -- dst0
-               \              /
-                s0 -------- s1
-               /              \
-        srcN --                -- dstN
+    Evaluate ARSA.
     """
-
-    net = Mininet(switch=OVSKernelSwitch, link=TCLink)
-    net.addController("c1", controller=OVSController)
-
-    # Configure the core switches
-
-    core = [net.addSwitch("core%d" % i, protocol='OpenFlow13') for i in range(2)]
-    create_bottleneck_link(net, core[0], core[1], config)
-
-    # create hosts
-    sources = [net.addHost('source%s' % i, ip='10.0.1.%d' % (i+1)) for i in range(N)]
-    sinks = [net.addHost('sink%s' % i, ip='10.0.2.%d' % (i+1)) for i in range(N)]
-
-    for host in sources:
-        create_access_link(net, core[0], host, config)
-    for host in sinks:
-        create_access_link(net, core[1], host, config)
-
-    net.build()
-
-    net.start()
-
-    # configure hosts
-    for sink in sinks:
-        sink.cmd('iperf3 -s -D')
-
-    info('Collecting data...\n')
-    info('Please wait for %d s\n' % (config.duration + (N - 1) * config.gap))
-
-    for i in range(N):
-        send_cmd = SND_CMD % ('10.0.2.%d' % (i+1), config.duration, config.tcp, i)
-        sources[i].cmd('sleep %d && %s &' % (i * config.gap + 1, send_cmd))
-
-    CLI(net)
-    info('Stoping all iperf3 tasks...\n')
-    os.system('pkill "iperf3*"')
-    info('Exiting mininet...\n')
-    net.stop()
+    if config.test == 'single':
+        single_bottleneck_link(N, config)
+    elif config.test == 'simple':
+        simple_linear(N, config)
+    else:
+        error('Unknown testcase is specified.\n')
 
 def parse_argument():
     cmdline = argparse.ArgumentParser(description='TCP Evaluation.')
@@ -79,6 +25,9 @@ def parse_argument():
     cmdline.add_argument('--tcp', dest='tcp', action='store',
                          default="reno",
                          help='TCP version to be used (default: reno).')
+    cmdline.add_argument('--test', dest='test', action='store',
+                         default="single",
+                         help='Testcase to be evaluated (default: single).')
     cmdline.add_argument('--duration', dest='duration', action='store',
                          default='100', type=int,
                          help='Duration of each transfer (default: 100 (s)))')
