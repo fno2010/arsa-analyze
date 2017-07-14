@@ -6,6 +6,7 @@ import argparse
 from mininet.net import Mininet
 from mininet.node import OVSKernelSwitch, OVSController
 from mininet.link import TCLink
+from mininet.log import info, setLogLevel
 from mininet.cli import CLI
 
 def create_bottleneck_link(net, n1, n2, config):
@@ -34,7 +35,7 @@ def eval_arsa(N, config):
     """
 
     net = Mininet(switch=OVSKernelSwitch, link=TCLink)
-    ctl = net.addController("c1", controller=OVSController)
+    net.addController("c1", controller=OVSController)
 
     # Configure the core switches
 
@@ -52,25 +53,26 @@ def eval_arsa(N, config):
 
     net.build()
 
-    ctl.start()
-    for sw in core:
-        sw.start([ctl])
-
     net.start()
 
     # configure hosts
     for sink in sinks:
         sink.cmd('iperf3 -s -D')
 
+    info('Collecting data...\n')
+    info('Please wait for %d s\n' % (config.duration + (N - 1) * config.gap))
+
     for i in range(N):
         send_cmd = SND_CMD % ('10.0.2.%d' % (i+1), config.duration, config.tcp, i)
         sources[i].cmd('sleep %d && %s &' % (i * config.gap + 1, send_cmd))
 
     CLI(net)
+    info('Stoping all iperf3 tasks...\n')
     os.system('pkill "iperf3*"')
+    info('Exiting mininet...\n')
     net.stop()
 
-if __name__ == '__main__':
+def parse_argument():
     cmdline = argparse.ArgumentParser(description='TCP Evaluation.')
     cmdline.add_argument('n_source', metavar='N', type=int,
                          help='The number of source/sink pairs.')
@@ -92,6 +94,11 @@ if __name__ == '__main__':
     cmdline.add_argument('--gap', dest='gap',
                          default='10', type=int,
                          help ='Gap between two flows (default 10 (s))')
+    return cmdline
 
+
+if __name__ == '__main__':
+    setLogLevel('info')
+    cmdline = parse_argument()
     config = cmdline.parse_args(sys.argv[1:])
     eval_arsa(config.n_source, config)
