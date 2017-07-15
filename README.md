@@ -1,5 +1,5 @@
 # TCP Congestion Control Test
 
 ``` sh
-docker-compose run -e MININET_SCRIPT_OPTIONS='3 --test simple --duration 120' mininet
+docker-compose run --rm -e MININET_SCRIPT_OPTIONS='3 --test simple --duration 120' mininet
 ```

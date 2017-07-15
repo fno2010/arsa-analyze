@@ -43,6 +43,8 @@ def parse_argument():
     cmdline.add_argument('--gap', dest='gap',
                          default='10', type=int,
                          help ='Gap between two flows (default 10 (s))')
+    cmdline.add_argument('-v', '--verbose', action='store_true',
+                         help ='Increase verbosity to trace import statements')
     return cmdline
 
 
@@ -50,4 +52,7 @@ if __name__ == '__main__':
     setLogLevel('info')
     cmdline = parse_argument()
     config = cmdline.parse_args(sys.argv[1:])
+
+    if config.verbose:
+        setLogLevel('debug')
     eval_arsa(config.n_source, config)

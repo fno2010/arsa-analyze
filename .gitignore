@@ -96,3 +96,6 @@ ENV/
 exp
 data
 output
+
+# Octave workspace
+octave-workspace

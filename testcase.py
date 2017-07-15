@@ -64,11 +64,12 @@ def simple_linear(N, config):
     """
     Evaluate ARSA in the following linear topo:
 
-        h1 - - - -> h2 - - - - ->h3
-        ^\   f1     |    f2     /:
-        : \         |          / : f3
-        :  s1-------s2--------s3 :
-        `- - - - - - - - - - - - '
+         - - - - - - - - - - - - - - - -
+        |              fn               |
+         - h1 - - ->h2 - - ->h3 ... hn<-
+           |   f1   |   f2   |      |
+           |        |        |      |
+           s1-------s2-------s3 ... sn
     """
     net = Mininet(switch=OVSKernelSwitch, link=TCLink)
     net.addController("c1", controller=OVSController)
@@ -79,7 +80,7 @@ def simple_linear(N, config):
         create_bottleneck_link(net, switch[i], switch[i + 1], config)
 
     # create hosts
-    host = [net.addHost('source%s' % i, ip='10.0.1.%d' % (i+1)) for i in range(N)]
+    host = [net.addHost('h%s' % i, ip='10.0.1.%d' % (i+1)) for i in range(N)]
 
     for i in range(N):
         create_access_link(net, switch[i], host[i], config)
