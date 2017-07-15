@@ -88,15 +88,17 @@ def simple_linear(N, config):
     net.start()
 
     # configure hosts
-    for h in host:
-        h.cmd('iperf3 -s -D')
-
     info('Collecting data...\n')
-    info('Please wait for %d s\n' % (config.duration))
+    info('Please wait for %d s\n' % (config.duration + 1))
 
     for i in range(N):
-        send_cmd = SND_CMD % ('10.0.1.%d' % ((i+1)%N+1), config.duration, config.tcp, i)
-        host[i].cmd('sleep %d && %s &' % (1, send_cmd))
+        x, y = i, (i + 1) % N
+        x, y = min(x, y), max(x, y)
+        # a hack to enable multiple iperf3 connections
+        port = 5201 + i
+        host[y].cmd('iperf3 -s -p %s -D' % (port))
+        send_cmd = SND_CMD % ('10.0.1.%d -p %d' % (y+1, port), config.duration, config.tcp, i)
+        host[x].cmd('sleep %d && %s &' % (1, send_cmd))
 
     CLI(net)
     info('Stoping all iperf3 tasks...\n')

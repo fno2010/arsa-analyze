@@ -15,9 +15,11 @@ for i in $(seq 2 $(python -c "print("$N"+1)")); do
 	echo "x$i = d$i(:,2);" >> tmp_plot_cwnd.m
 	echo "y$i = d$i(:,3);" >> tmp_plot_cwnd.m
 	echo "hold on" >> tmp_plot_cwnd.m
-	echo "plot(x$i, y$i)" >> tmp_plot_cwnd.m
+	echo "plot(x$i, y$i, \";$i;\")" >> tmp_plot_cwnd.m
 	rm -f _tmp
 done
+
+echo "legend()" >> tmp_plot_cwnd.m
 
 echo "print $TITLE.png" >> tmp_plot_cwnd.m
 
