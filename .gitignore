@@ -91,3 +91,8 @@ ENV/
 
 # Generated figures
 *.png
+
+# Local files
+exp
+data
+output
