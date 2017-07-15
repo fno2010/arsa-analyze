@@ -3,6 +3,7 @@
 N=$1 # number of host data
 M=$2 # length of conv vector
 IPERF_DATA=$3
+OUTPUT_PREFIX=$4
 
 function script() {
     echo "$1" >> tmp_plot.m
@@ -38,7 +39,7 @@ function prepare_conv_func() {
 
 function plot_col_conv() {
     plot_col "$1" "$2" 'y = conv(conv_vec/sum(conv_vec), a$i(:,$2));' "$M/2" '+'$M'/2-1'
-    #plot_cdf "$1" "$2" 'y = conv(conv_vec/sum(conv_vec), a$i(:,$2));' "$M/2" '+'$M'/2-1'
+    plot_cdf "$1" "$2" 'y = conv(conv_vec/sum(conv_vec), a$i(:,$2));' "$M/2" '+'$M'/2-1'
 }
 
 function plot_col_reg() {
@@ -72,7 +73,7 @@ function plot_iperf_data() {
     load_data
     prepare_conv_func
 
-    plot_col_conv "cwnd-conv" 2
+    plot_col_conv "$OUTPUT_PREFIX-cwnd-conv" 2
 }
 
 rm -f tmp_plot.m
