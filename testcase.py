@@ -81,9 +81,13 @@ def simple_linear(N, config):
 
     # create hosts
     host = [net.addHost('h%s' % i, ip='10.0.1.%d' % (i+1)) for i in range(N)]
+    extra_host = [net.addHost('extra%d' % i, ip='10.0.2.%d' % (i+1)) for i in range(2)]
 
     for i in range(N):
         create_access_link(net, switch[i], host[i], config)
+
+    for i in range(2):
+        create_access_link(net, switch[i * (N-1)], extra_host[i], config)
 
     net.build()
     net.start()
@@ -92,14 +96,15 @@ def simple_linear(N, config):
     info('Collecting data...\n')
     info('Please wait for %d s\n' % (config.duration + 1))
 
-    for i in range(N):
-        x, y = i, (i + 1) % N
-        x, y = min(x, y), max(x, y)
-        # a hack to enable multiple iperf3 connections
-        port = 5201 + i
-        host[y].cmd('iperf3 -s -p %s -D' % (port))
-        send_cmd = SND_CMD % ('10.0.1.%d -p %d' % (y+1, port), config.duration, config.tcp, i)
-        host[x].cmd('sleep %d && %s &' % (1, send_cmd))
+    for i in range(N-1):
+        host[i+1].cmd('iperf3 -s -D')
+        send_cmd = SND_CMD % ('10.0.1.%d' % (i+2), config.duration, config.tcp, i)
+        host[i].cmd('sleep %d && %s &' % (1, send_cmd))
+
+    for i in range(1):
+        extra_host[i+1].cmd('iperf3 -s -D')
+        send_cmd = SND_CMD % ('10.0.2.%d' % (i+2), config.duration, config.tcp, i + N -1)
+        extra_host[i].cmd('sleep %d && %s &' % (1, send_cmd))
 
     CLI(net)
     info('Stoping all iperf3 tasks...\n')
