@@ -1,0 +1,3 @@
+[submodule "captcp"]
+	path = captcp
+	url = ssh://git@github.com/emiapwil/captcp
