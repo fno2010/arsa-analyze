@@ -9,7 +9,7 @@ from mininet.log import info
 from mininet.cli import CLI
 
 from util.link import create_access_link, create_bottleneck_link
-from util.cmd import SND_CMD
+from util.cmd import SND_CMD, MON_CMD
 
 def single_bottleneck_link(N, config):
     """
@@ -94,20 +94,25 @@ def simple_linear(N, config):
 
     # configure hosts
     info('Collecting data...\n')
-    info('Please wait for %d s\n' % (config.duration + 1))
+    info('Please wait for %d s\n' % (config.duration + 2))
 
     for i in range(N-1):
+        mon_cmd = MON_CMD % ('h%s-eth0' % i, 'h%s' % i, '')
+        host[i].cmd('sleep %d && %s &' % (1, mon_cmd))
         host[i+1].cmd('iperf3 -s -D')
         send_cmd = SND_CMD % ('10.0.1.%d' % (i+2), config.duration, config.tcp, i)
-        host[i].cmd('sleep %d && %s &' % (1, send_cmd))
+        host[i].cmd('sleep %d && %s &' % (2, send_cmd))
 
     for i in range(1):
+        mon_cmd = MON_CMD % ('extra%s-eth0' % i, 'extra%s' % (i), '')
+        extra_host[i].cmd('sleep %d && %s &' % (1, mon_cmd))
         extra_host[i+1].cmd('iperf3 -s -D')
         send_cmd = SND_CMD % ('10.0.2.%d' % (i+2), config.duration, config.tcp, i + N -1)
-        extra_host[i].cmd('sleep %d && %s &' % (1, send_cmd))
+        extra_host[i].cmd('sleep %d && %s &' % (2, send_cmd))
 
     CLI(net)
     info('Stoping all iperf3 tasks...\n')
     os.system('pkill "iperf3*"')
+    os.system('pkill "tcpdump*"')
     info('Exiting mininet...\n')
     net.stop()
