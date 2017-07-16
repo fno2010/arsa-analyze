@@ -91,6 +91,7 @@ ENV/
 
 # Generated figures
 *.png
+*.eps
 
 # Local files
 exp

@@ -1,17 +1,12 @@
 #!/usr/bin/env python2.7
 
-import os
-
-from mininet.net import Mininet
-from mininet.node import OVSKernelSwitch, OVSController
-from mininet.link import TCLink
 from mininet.log import info
-from mininet.cli import CLI
 
 from util.link import create_access_link, create_bottleneck_link
 from util.cmd import SND_CMD, MON_CMD
+from util.case import Case
 
-def single_bottleneck_link(N, config):
+class SingleBottleneckLinkTest(Case):
     """
     Evaluate ARSA in the following topology:
 
@@ -22,45 +17,42 @@ def single_bottleneck_link(N, config):
         srcN --                -- dstN
     """
 
-    net = Mininet(switch=OVSKernelSwitch, link=TCLink)
-    net.addController("c1", controller=OVSController)
+    def __init__(self, N, config):
+        self.N = N
+        self.config = config
+        Case.__init__(self)
 
-    # Configure the core switches
+    def create_nodes(self):
+        self.core = [self.net.addSwitch("core%d" % i, protocol='OpenFlow13')
+                     for i in range(2)]
+        self.sources = [self.net.addHost('source%s' % i, ip='10.0.1.%d' % (i+1))
+                        for i in range(self.N)]
+        self.sinks = [self.net.addHost('sink%s' % i, ip='10.0.2.%d' % (i+1))
+                      for i in range(self.N)]
 
-    core = [net.addSwitch("core%d" % i, protocol='OpenFlow13') for i in range(2)]
-    create_bottleneck_link(net, core[0], core[1], config)
+    def config_nodes(self):
+        create_bottleneck_link(self.net, self.core[0], self.core[1], self.config)
+        for host in self.sources:
+            create_access_link(self.net, self.core[0], host, self.config)
+        for host in self.sinks:
+            create_access_link(self.net, self.core[1], host, self.config)
 
-    # create hosts
-    sources = [net.addHost('source%s' % i, ip='10.0.1.%d' % (i+1)) for i in range(N)]
-    sinks = [net.addHost('sink%s' % i, ip='10.0.2.%d' % (i+1)) for i in range(N)]
+        Case.config_nodes(self)
 
-    for host in sources:
-        create_access_link(net, core[0], host, config)
-    for host in sinks:
-        create_access_link(net, core[1], host, config)
+    def test(self):
+        for sink in self.sinks:
+            sink.cmd('iperf3 -s -D')
 
-    net.build()
+        info('Collecting data...\n')
+        info('Please wait for %d s\n' % (self.config.duration + (self.N - 1) * self.config.gap))
 
-    net.start()
+        for i in range(self.N):
+            send_cmd = SND_CMD % ('10.0.2.%d' % (i+1), self.config.duration, self.config.tcp, i)
+            self.sources[i].cmd('sleep %d && %s &' % (i * self.config.gap + 1, send_cmd))
 
-    # configure hosts
-    for sink in sinks:
-        sink.cmd('iperf3 -s -D')
+        Case.test(self)
 
-    info('Collecting data...\n')
-    info('Please wait for %d s\n' % (config.duration + (N - 1) * config.gap))
-
-    for i in range(N):
-        send_cmd = SND_CMD % ('10.0.2.%d' % (i+1), config.duration, config.tcp, i)
-        sources[i].cmd('sleep %d && %s &' % (i * config.gap + 1, send_cmd))
-
-    CLI(net)
-    info('Stoping all iperf3 tasks...\n')
-    os.system('pkill "iperf3*"')
-    info('Exiting mininet...\n')
-    net.stop()
-
-def simple_linear(N, config):
+class SimpleLinearTest(Case):
     """
     Evaluate ARSA in the following linear topo:
 
@@ -71,48 +63,51 @@ def simple_linear(N, config):
            |        |        |      |
            s1-------s2-------s3 ... sn
     """
-    net = Mininet(switch=OVSKernelSwitch, link=TCLink)
-    net.addController("c1", controller=OVSController)
 
-    # configure switches
-    switch = [net.addSwitch("s%d" % i, protocol='OpenFlow13') for i in range(N)]
-    for i in range(N - 1):
-        create_bottleneck_link(net, switch[i], switch[i + 1], config)
+    def __init__(self, N, config):
+        self.N = N
+        self.config = config
+        Case.__init__(self)
 
-    # create hosts
-    host = [net.addHost('h%s' % i, ip='10.0.1.%d' % (i+1)) for i in range(N)]
-    extra_host = [net.addHost('extra%d' % i, ip='10.0.2.%d' % (i+1)) for i in range(2)]
+    def create_nodes(self):
+        self.switch = [self.net.addSwitch("s%d" % i, protocol='OpenFlow13')
+                       for i in range(self.N)]
+        self.host = [self.net.addHost('h%s' % i, ip='10.0.1.%d' % (i+1))
+                     for i in range(self.N)]
+        self.extra_host = [self.net.addHost('extra%d' % i, ip='10.0.2.%d' % (i+1))
+                           for i in range(2)]
 
-    for i in range(N):
-        create_access_link(net, switch[i], host[i], config)
+    def config_nodes(self):
+        for i in range(self.N - 1):
+            create_bottleneck_link(self.net, self.switch[i], self.switch[i + 1],
+                                   self.config)
+        for i in range(self.N):
+            create_access_link(self.net, self.switch[i], self.host[i],
+                               self.config)
+        for i in range(2):
+            create_access_link(self.net, self.switch[i * (self.N-1)],
+                               self.extra_host[i], self.config)
 
-    for i in range(2):
-        create_access_link(net, switch[i * (N-1)], extra_host[i], config)
+        Case.config_nodes(self)
 
-    net.build()
-    net.start()
+    def test(self):
+        info('Collecting data...\n')
+        info('Please wait for %d s\n' % (self.config.duration + 2))
 
-    # configure hosts
-    info('Collecting data...\n')
-    info('Please wait for %d s\n' % (config.duration + 2))
+        for i in range(self.N-1):
+            mon_cmd = MON_CMD % ('h%s-eth0' % i, 'h%s' % i, '')
+            self.host[i].cmd('sleep %d && %s &' % (1, mon_cmd))
+            self.host[i+1].cmd('iperf3 -s -D')
+            send_cmd = SND_CMD % ('10.0.1.%d' % (i+2), self.config.duration,
+                                  self.config.tcp, i)
+            self.host[i].cmd('sleep %d && %s &' % (2, send_cmd))
 
-    for i in range(N-1):
-        mon_cmd = MON_CMD % ('h%s-eth0' % i, 'h%s' % i, '')
-        host[i].cmd('sleep %d && %s &' % (1, mon_cmd))
-        host[i+1].cmd('iperf3 -s -D')
-        send_cmd = SND_CMD % ('10.0.1.%d' % (i+2), config.duration, config.tcp, i)
-        host[i].cmd('sleep %d && %s &' % (2, send_cmd))
+        for i in range(1):
+            mon_cmd = MON_CMD % ('extra%s-eth0' % i, 'e%s' % (i), '')
+            self.extra_host[i].cmd('sleep %d && %s &' % (1, mon_cmd))
+            self.extra_host[i+1].cmd('iperf3 -s -D')
+            send_cmd = SND_CMD % ('10.0.2.%d' % (i+2), self.config.duration,
+                                  self.config.tcp, i + self.N -1)
+            self.extra_host[i].cmd('sleep %d && %s &' % (2, send_cmd))
 
-    for i in range(1):
-        mon_cmd = MON_CMD % ('extra%s-eth0' % i, 'e%s' % (i), '')
-        extra_host[i].cmd('sleep %d && %s &' % (1, mon_cmd))
-        extra_host[i+1].cmd('iperf3 -s -D')
-        send_cmd = SND_CMD % ('10.0.2.%d' % (i+2), config.duration, config.tcp, i + N -1)
-        extra_host[i].cmd('sleep %d && %s &' % (2, send_cmd))
-
-    CLI(net)
-    info('Stoping all iperf3 tasks...\n')
-    os.system('pkill "iperf3*"')
-    os.system('pkill "tcpdump*"')
-    info('Exiting mininet...\n')
-    net.stop()
+        Case.test(self)

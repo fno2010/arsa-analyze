@@ -56,4 +56,4 @@ if __name__ == '__main__':
             value = value.ewm(**ewma_params).mean()
         plot(time, value)
 
-    savefig(''.join(filename.split('.')[:-1]) + '.png')
+    savefig(''.join(filename.split('.')[:-1]) + '.eps')

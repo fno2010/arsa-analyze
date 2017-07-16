@@ -5,16 +5,16 @@ import argparse
 
 from mininet.log import error, setLogLevel
 
-from testcase import single_bottleneck_link, simple_linear
+from testcase import SingleBottleneckLinkTest, SimpleLinearTest
 
 def eval_arsa(N, config):
     """
     Evaluate ARSA.
     """
     if config.test == 'single':
-        single_bottleneck_link(N, config)
+        SingleBottleneckLinkTest(N, config)
     elif config.test == 'simple':
-        simple_linear(N, config)
+        SimpleLinearTest(N, config)
     else:
         error('Unknown testcase is specified.\n')
 
