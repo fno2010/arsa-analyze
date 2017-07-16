@@ -104,7 +104,7 @@ def simple_linear(N, config):
         host[i].cmd('sleep %d && %s &' % (2, send_cmd))
 
     for i in range(1):
-        mon_cmd = MON_CMD % ('extra%s-eth0' % i, 'extra%s' % (i), '')
+        mon_cmd = MON_CMD % ('extra%s-eth0' % i, 'e%s' % (i), '')
         extra_host[i].cmd('sleep %d && %s &' % (1, mon_cmd))
         extra_host[i+1].cmd('iperf3 -s -D')
         send_cmd = SND_CMD % ('10.0.2.%d' % (i+2), config.duration, config.tcp, i + N -1)
