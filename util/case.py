@@ -1,6 +1,7 @@
 #!/usr/bin/env python2.7
 
 import os
+from time import sleep
 
 from mininet.net import Mininet
 from mininet.node import OVSKernelSwitch, OVSController
@@ -8,12 +9,15 @@ from mininet.link import TCLink
 from mininet.log import info
 from mininet.cli import CLI
 
+from util.cmd import CLEAR_LINE
+
 class Case(object):
     """
     Object for the testcase.
     """
 
     def __init__(self):
+        self.waiting_time = 0
         self.setup_network()
         self.create_nodes()
         self.config_nodes()
@@ -42,15 +46,22 @@ class Case(object):
 
     def test(self):
         """
-        Your test program.
+        Override it by your own test program.
         """
+        while self.waiting_time > 0:
+            info(CLEAR_LINE)
+            info('Please wait for %d s' % (self.waiting_time))
+            sleep(1)
+            self.waiting_time -= 1
+        info(CLEAR_LINE)
+        info(u'Done \u2714\n')
         CLI(self.net)
 
     def clean_up(self):
         """
         Clean up the environment and exit.
         """
-        info('Stoping all iperf3 tasks...\n')
+        info('Stoping all backend tasks...\n')
         os.system('pkill "iperf3*"')
         os.system('pkill "tcpdump*"')
         info('Exiting mininet...\n')

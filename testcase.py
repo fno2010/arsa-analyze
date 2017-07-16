@@ -44,7 +44,7 @@ class SingleBottleneckLinkTest(Case):
             sink.cmd('iperf3 -s -D')
 
         info('Collecting data...\n')
-        info('Please wait for %d s\n' % (self.config.duration + (self.N - 1) * self.config.gap))
+        self.waiting_time = self.config.duration + 2
 
         for i in range(self.N):
             send_cmd = SND_CMD % ('10.0.2.%d' % (i+1), self.config.duration, self.config.tcp, i)
@@ -92,7 +92,7 @@ class SimpleLinearTest(Case):
 
     def test(self):
         info('Collecting data...\n')
-        info('Please wait for %d s\n' % (self.config.duration + 2))
+        self.waiting_time = self.config.duration + 2
 
         for i in range(self.N-1):
             mon_cmd = MON_CMD % ('h%s-eth0' % i, 'h%s' % i, '')
