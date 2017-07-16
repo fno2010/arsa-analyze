@@ -116,4 +116,4 @@ plot_pcap_linear
 
 octave tmp_plot.m
 
-# rm -f tmp*
+rm -f tmp*
