@@ -5,7 +5,7 @@ import argparse
 
 from mininet.log import error, setLogLevel
 
-from testcase import SingleBottleneckLinkTest, SimpleLinearTest
+from testcase import SingleBottleneckLinkTest, SimpleLinearTest, SingleLinkMixTCPTest
 
 def eval_arsa(N, config):
     """
@@ -15,6 +15,8 @@ def eval_arsa(N, config):
         SingleBottleneckLinkTest(N, config)
     elif config.test == 'simple':
         SimpleLinearTest(N, config)
+    elif config.test == 'single-mix':
+        SingleLinkMixTCPTest(config)
     else:
         error('Unknown testcase is specified.\n')
 
@@ -31,6 +33,9 @@ def parse_argument():
     cmdline.add_argument('--duration', dest='duration', action='store',
                          default='100', type=int,
                          help='Duration of each transfer (default: 100 (s)))')
+    cmdline.add_argument('--mss', dest='mss', action='store',
+                         default='1460', type=int,
+                         help='TCP/SCTP maximum segment size (default: 1460 (bytes)))')
     cmdline.add_argument('--bw', dest='bw',
                          default='1', type=int,
                          help ='Bottleneck bandwidth (in Mbps, default: 1)')
@@ -43,6 +48,8 @@ def parse_argument():
     cmdline.add_argument('--gap', dest='gap',
                          default='10', type=int,
                          help ='Gap between two flows (default 10 (s))')
+    cmdline.add_argument('--json', dest='json', type=argparse.FileType('r'),
+                         help = 'Extra configuration parameters in json file format')
     cmdline.add_argument('-v', '--verbose', action='store_true',
                          help ='Increase verbosity to trace import statements')
     return cmdline
