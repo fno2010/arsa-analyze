@@ -142,7 +142,7 @@ class SingleLinkMixTCPTest(Case):
         self.sources = [
             {
                 'tcp': self.json[t]['tcp'],
-                'hosts': [self.net.addHost('s%s%d' % (self.json[t]['tcp'], i),
+                'hosts': [self.net.addHost('s%s%d' % (self.json[t]['tcp'][:5], i),
                                            ip='10.0.%d.%d' % (2*t+1, i+1))
                           for i in range(self.json[t]['num'])]
             } for t in range(len(self.json))
@@ -150,7 +150,7 @@ class SingleLinkMixTCPTest(Case):
         self.sinks = [
             {
                 'tcp': self.json[t]['tcp'],
-                'hosts': [self.net.addHost('d%s%d' % (self.json[t]['tcp'], i),
+                'hosts': [self.net.addHost('d%s%d' % (self.json[t]['tcp'][:5], i),
                                            ip='10.0.%d.%d' % (2*t+2, i+1))
                           for i in range(self.json[t]['num'])]
             } for t in range(len(self.json))
