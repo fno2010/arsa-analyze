@@ -186,6 +186,26 @@ class SingleLinkMixTCPTest(Case):
 
         Case.test(self)
 
+        self.report()
+
+    def report(self):
+        info('=' * 25 + ' Report ' + '=' * 25 + '\n')
+
+        info('=' * 20 + ' Config ' + '=' * 20 + '\n')
+        for tcp in self.json:
+            info(str(tcp) + '\n')
+
+        info('=' * 20 + ' Result ' + '=' * 20 + '\n')
+        cnt = 0
+        for tcp in self.json:
+            for i in range(tcp['num']):
+                info('\n===> %s flow #%d: <===\n\n' % (tcp['tcp'], i))
+                for l in open('%d.log' % cnt, 'r').readlines()[-5:-2]:
+                    info(l)
+                cnt += 1
+
+        info('=' * 58 + '\n')
+
 
 class LinearMixTCPTest(Case):
     """
@@ -248,3 +268,23 @@ class LinearMixTCPTest(Case):
             self.host[i]['src'].cmd('sleep %d && %s &' % (2, send_cmd))
 
         Case.test(self)
+
+        self.report()
+
+    def report(self):
+        info('=' * 25 + ' Report ' + '=' * 25 + '\n')
+
+        info('=' * 20 + ' Config ' + '=' * 20 + '\n')
+        for tcp in self.json:
+            info(str(tcp) + '\n')
+
+        info('=' * 20 + ' Result ' + '=' * 20 + '\n')
+        for i in range(self.F):
+            info('\n===> flow #%d (%s, %d -> %d): <===\n\n' % (i,
+                                                               self.json[i]['tcp'],
+                                                               self.json[i]['from'],
+                                                               self.json[i]['to']))
+            for l in open('%d.log' % i, 'r').readlines()[-5:-2]:
+                info(l)
+
+        info('=' * 58 + '\n')
