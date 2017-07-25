@@ -185,3 +185,66 @@ class SingleLinkMixTCPTest(Case):
                 cnt += 1
 
         Case.test(self)
+
+
+class LinearMixTCPTest(Case):
+    """
+    Evaluate bandwidth allocation of mixed TCP flows in a linear topology.
+
+    Require advanced JSON configuration file.
+
+    Example parameters.json:
+
+    [
+      {"tcp": "vegas", "from": 0, "to": 1},
+      {"tcp": "vegas", "from": 1, "to": 2},
+      {"tcp": "bbr", "from": 0, "to": 2}
+    ]
+    """
+
+    def __init__(self, config):
+        self.config = config
+        self.json = json.load(config.json)
+        self.N = max([max(x['from'], x['to']) for x in self.json]) + 1
+        self.F = len(self.json)
+        Case.__init__(self)
+
+    def create_nodes(self):
+        self.core = [self.net.addSwitch("core%d" % i, protocol="OpenFlow13")
+                     for i in range(self.N)]
+        self.host = [
+            {
+                'tcp': self.json[i]['tcp'],
+                'src': self.net.addHost('s%s%d' % (self.json[i]['tcp'][:5], i),
+                                        ip='10.0.1.%d' % (i+1)),
+                'dst': self.net.addHost('d%s%d' % (self.json[i]['tcp'][:5], i),
+                                        ip='10.0.2.%d' % (i+1))
+            } for i in range(self.F)
+        ]
+
+    def config_nodes(self):
+        for i in range(self.N - 1):
+            create_bottleneck_link(self.net, self.core[i], self.core[i + 1],
+                                   self.config)
+
+        for i in range(self.F):
+            create_access_link(self.net, self.core[self.json[i]['from']],
+                               self.host[i]['src'], self.config)
+            create_access_link(self.net, self.core[self.json[i]['to']],
+                               self.host[i]['dst'], self.config)
+
+        Case.config_nodes(self)
+
+    def test(self):
+        for i in range(self.F):
+            self.host[i]['dst'].cmd('iperf3 -s -D')
+
+        info('Collecting data...\n')
+        self.waiting_time = self.config.duration + 2
+
+        for i in range(self.F):
+            send_cmd = SND_CMD % ('10.0.2.%d' % (i+1), self.config.duration,
+                                  self.config.tcp, self.config.mss, i)
+            self.host[i]['src'].cmd('sleep %d && %s &' % (2, send_cmd))
+
+        Case.test(self)

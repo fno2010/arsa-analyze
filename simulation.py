@@ -5,7 +5,7 @@ import argparse
 
 from mininet.log import error, setLogLevel
 
-from testcase import SingleBottleneckLinkTest, SimpleLinearTest, SingleLinkMixTCPTest
+from testcase import SingleBottleneckLinkTest, SimpleLinearTest, SingleLinkMixTCPTest, LinearMixTCPTest
 
 def eval_arsa(N, config):
     """
@@ -17,6 +17,8 @@ def eval_arsa(N, config):
         SimpleLinearTest(N, config)
     elif config.test == 'single-mix':
         SingleLinkMixTCPTest(config)
+    elif config.test == 'linear-mix':
+        LinearMixTCPTest(config)
     else:
         error('Unknown testcase is specified.\n')
 

@@ -98,5 +98,8 @@ exp
 data
 output
 
+# Generated reports
+*.csv
+
 # Octave workspace
 octave-workspace
