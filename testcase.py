@@ -288,3 +288,132 @@ class LinearMixTCPTest(Case):
                 info(l)
 
         info('=' * 58 + '\n')
+
+class ClosTopologyTest(Case):
+    """
+    Evaluate ARSA in a Clos topology
+
+    Example parameters.json:
+
+    [
+    {"tcp": "vegas", "from": [0,0,0], "to": [0,0,1], "time": 50},
+    {"tcp": "vegas", "from": [0,1,0], "to": [0,0,1]}
+    ]
+    """
+
+    def __init__(self, K, config):
+        self.K = K / 2 * 2
+        self.config = config
+        self.json = json.load(config.json)
+
+        Case.__init__(self)
+
+    def create_nodes(self):
+        K = self.K
+        K2 = self.K / 2
+        # (k/2)^2 core switches
+        self.core = [[self.net.addSwitch('core%d%d' % (i,j), protocol='OpenFlow13')
+                      for j in range(K2)]
+                     for i in range(K2)]
+
+        self.aggr = [[self.net.addSwitch('aggr%d%d' % (i,j), protocol='OpenFlow13')
+                      for j in range(K2)]
+                     for i in range(K)]
+        self.edge = [[self.net.addSwitch('edge%d%d' % (i,j), protocol='OpenFlow13')
+                      for j in range(K2)]
+                     for i in range(K)]
+
+        self.hosts = {}
+        # hosts are added as switches to avoid iperf3 port conflicts
+        for i in range(K): # pod
+            for j in range(K2): # edge switch
+                for k in range(K2): # port
+                    self.hosts[(i,j,k)] = self.net.addSwitch('h%d%d%d' % (i,j,k),
+                                                             protocol='OpenFlow13')
+
+        # set up the links
+        for i in range(K2):
+            for j in range(K2):
+                for k in range(K):
+                    create_access_link(self.net,
+                                       self.core[i][j],
+                                       self.aggr[k][i],
+                                       self.config)
+
+        for i in range(K):
+            for j in range(K2):
+                for k in range(K2):
+                    create_access_link(self.net,
+                                       self.aggr[i][j],
+                                       self.edge[i][k],
+                                       self.config)
+
+        for i in range(K):
+            for j in range(K2):
+                for k in range(K2):
+                    create_bottleneck_link(self.net,
+                                           self.edge[i][j],
+                                           self.hosts[(i,j,k)],
+                                           self.config)
+
+        self.flows = []
+        self.delay = 0
+        for i in range(len(self.json)):
+            tcp = self.json[i]['tcp']
+            si, sj, sk = self.json[i]['from']
+            print si, sj, sk
+            di, dj, dk = self.json[i]['to']
+            print di, dj, dk
+            delay = self.json[i]['time'] if 'time' in self.json[i] else 5
+            sip = '10.%d.%d.%d' % (si, sj * K2 + sk, i+1)
+            dip = '10.%d.%d.%d' % (di, dj * K2 + dk, i+1)
+            sender = self.net.addHost('s%s%d' % (tcp, i), ip=sip)
+            receiver = self.net.addHost('d%s%d' % (tcp, i), ip=dip)
+            self.flows += [(sender, receiver, sip, dip, tcp, delay)]
+            self.delay = max(self.delay, delay)
+
+            create_access_link(self.net,
+                               self.hosts[(si, sj, sk)],
+                               sender,
+                               self.config)
+            create_access_link(self.net,
+                               self.hosts[(di, dj, dk)],
+                               receiver,
+                               self.config)
+
+    def config_nodes(self):
+        Case.config_nodes(self)
+
+    def test(self):
+        info('Collecting data...\n')
+        self.waiting_time = self.config.duration + self.delay + 2
+
+        cnt = 0
+        for sender, receiver, sip, dip, tcp, delay in self.flows:
+            recv_cmd = 'iperf3 -s -D'
+            send_cmd = SND_CMD % (dip, self.config.duration,
+                                  tcp, self.config.mss, cnt)
+            cnt += 1
+            print sip, dip, send_cmd
+
+            receiver.cmd(recv_cmd)
+            sender.cmd('sleep %d && %s &' % (delay, send_cmd))
+
+        Case.test(self)
+        self.report()
+
+    def report(self):
+        info('=' * 25 + ' Report ' + '=' * 25 + '\n')
+
+        info('=' * 20 + ' Config ' + '=' * 20 + '\n')
+        for tcp in self.json:
+            info(str(tcp) + '\n')
+
+        cnt = 0
+        for sender, receiver, sip, dip, tcp, delay in self.flows:
+            info('\n=== #%d flow: %s, %s -> %s ===\n\n' % (cnt, tcp, sip, dip))
+            for l in open('%d.log' % cnt, 'r').readlines()[-5:-2]:
+                info(l)
+            cnt += 1
+
+        info('=' * 58 + '\n')
