@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, fmin_slsqp
 
 def Utility(A, c, a, w, x):
     """
@@ -43,16 +43,42 @@ def Cons(A, c, a):
     cons = []
     for j in range(J):
         cons.append({'type': 'ineq',
-                     'func': lambda x: np.array([x[j]]),
+                     'fun': lambda x: np.array([x[j] - 1e-6]),
                      'jac': lambda x: np.array([1 if i==j else 0
                                                 for i in range(J)])})
 
     for k in range(K):
         cons.append({'type': 'ineq',
-                     'func': lambda x: np.array([c[k] - np.dot(A[k], x)]),
+                     'fun': lambda x: np.array([c[k] - np.dot(A[k], x)]),
                      'jac': lambda x: -A[k]})
 
     return tuple(cons)
+
+def ConsFunc(A, c, a, x):
+    A = np.array(A)
+    J = len(a)
+    K = len(c)
+    assert A.shape == (K, J)
+    assert len(x) == J
+
+    return np.array([
+        x[j] for j in range(J)
+    ] + [
+        c[k] - np.dot(A[k], x) for k in range(K)
+    ])
+
+def ConsJoc(A, c, a, x):
+    A = np.array(A)
+    J = len(a)
+    K = len(c)
+    assert A.shape == (K, J)
+    assert len(x) == J
+
+    return np.array([
+        [1 if i==j else 0 for i in range(J)] for j in range(J)
+    ] + [
+        -A[k] for k in range(K)
+    ])
 
 def Lagrangian(A, c, a, w, x, _lambda):
     """
@@ -100,11 +126,13 @@ if __name__ == '__main__':
         # res = minimize(La, x_esti, method='nelder-mead', options={'xtol': 1e-6, 'disp': True})
         func_util = lambda x: -Utility(A, c, a, w, x)
         func_jac = lambda x: -Jac(a, w, x)
-        cons = Cons(A, c, a)
-        res = minimize(func_util, x_esti, jac=func_jac, bounds=[(0, 1), (0, 1), (0, 1)],
-                       method='SLSQP', options={'disp': True})
-
-        x_esti = res.x
+        # cons = Cons(A, c, a)
+        # res = minimize(func_util, x_esti, jac=func_jac, constraints=cons,
+        #                method='SLSQP', options={'disp': True})
+        cons_func = lambda x: ConsFunc(A, c, a, x)
+        cons_joc = lambda x: ConsJoc(A, c, a, x)
+        x_esti = fmin_slsqp(func_util, x_real, fprime=func_jac,
+                         f_ieqcons=cons_func, fprime_ieqcons=cons_joc, disp=1)
         x_err = np.linalg.norm(x_esti - x_real)
 
         print('After Iter %d: x=%s, err=%f' % (it, x_esti, x_err))
@@ -120,6 +148,7 @@ if __name__ == '__main__':
 
         # Update w
         dw = np.array(x_esti * DWX)[0]
-        w += step * dw / np.linalg.norm(dw)
+        w -= step * dw / np.linalg.norm(dw)
+        w = w / w[0]
         it += 1
     print('Final Result: ', w, x_esti)
