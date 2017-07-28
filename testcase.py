@@ -185,7 +185,6 @@ class SingleLinkMixTCPTest(Case):
                 cnt += 1
 
         Case.test(self)
-
         self.report()
 
     def report(self):
@@ -268,7 +267,6 @@ class LinearMixTCPTest(Case):
             self.host[i]['src'].cmd('sleep %d && %s &' % (2, send_cmd))
 
         Case.test(self)
-
         self.report()
 
     def report(self):
@@ -288,6 +286,7 @@ class LinearMixTCPTest(Case):
                 info(l)
 
         info('=' * 58 + '\n')
+
 
 class ClosTopologyTest(Case):
     """

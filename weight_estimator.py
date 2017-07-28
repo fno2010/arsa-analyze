@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
-from scipy.optimize import minimize, fmin_slsqp
+from scipy.optimize import fmin_slsqp
 
 def Utility(A, c, a, w, x):
     """
@@ -32,7 +32,7 @@ def Jac(a, w, x):
     assert len(w) == J
     assert len(x) == J
 
-    return np.array([w[j] * np.power(x[j], a[j]) for j in range(J)])
+    return np.array([w[j] * np.power(x[j], -a[j]) for j in range(J)])
 
 def Cons(A, c, a):
     A = np.array(A)
@@ -98,16 +98,56 @@ def Lagrangian(A, c, a, w, x, _lambda):
         L -= _lambda[k] * (np.dot(A[k], x) - c[k])
     return L
 
+def Spherical2Cartesian(theta):
+    N = len(theta)
+    car = np.zeros(N+1)
+    sin_t = np.sin(theta)
+    cos_t = np.cos(theta)
+
+    car[0] = 1
+    for i in range(1, N+1):
+        car[i] = car[i-1]*sin_t[i-1]
+
+    for i in range(N):
+        car[i] *= cos_t[i]
+
+    return car
+
+def SphericalJoc(theta):
+    N = len(theta)
+    joc = np.zeros((N+1, N))
+    sin_t = np.sin(theta)
+    cos_t = np.cos(theta)
+
+    for i in range(N+1):
+        for j in range(N):
+            if j < i:
+                joc[i, j] = np.prod([cos_t[t] if t==j else sin_t[t]
+                                     for t in range(i-1)]) * cos_t[j]
+            elif j == i:
+                joc[i, j] = -np.prod(sin_t[:i])
+            else:
+                joc[i, j] = 0
+
+    return joc
 
 if __name__ == '__main__':
-    A = np.mat([[1, 1, 0], [1, 0, 1]])
-    c = [1, 1]
-    a = [1, 1, 1]
-    w = [1, 1, 1]
+    # A = np.mat([[1, 1, 0, 0, 1], [1, 0, 0, 1, 0], [0, 1, 1, 0, 0]])
+    A = np.mat([[0, 0, 1, 1], [1, 0, 0, 1], [0, 1, 1, 0]])
+    c = [1, 1, 1]
+    a = [1, 1, 1, 1]
+    # w = [1, 1, 1, 1]
+    # w = [1, 1, 1, 1, 1]
+    th = [np.arccos(1/np.sqrt(i)) for i in range(len(a), 1, -1)]
+    w = Spherical2Cartesian(th)
+    # w = [1., 1.4608004, 1.00000105, 1.46079935, 1.4608004]
     K = len(c)
     J = len(a)
     # The real w should be [2, 1, 1]
-    x_real = [0.5, 0.5, 0.5]
+    x_real = [0.4, 0.6, 0.4, 0.6]
+    # x_real = [0.3, 0.3, 0.3, 0.3, 0.3]
+    # x_real = [0.272, 0.350, 0.571, 0.677, 0.342]
+    # x_real = [0.384, 0.571, 0.388, 0.567, 0.1]
     x_esti = []
     x_esti.extend(x_real)
     # x_esti.extend([1, 1])
@@ -115,7 +155,7 @@ if __name__ == '__main__':
 
     N = 100
     err = 0.01
-    step = 0.1
+    step = 0.01 * np.pi
 
     it = 0
     while True:
@@ -136,6 +176,7 @@ if __name__ == '__main__':
         x_err = np.linalg.norm(x_esti - x_real)
 
         print('After Iter %d: x=%s, err=%f' % (it, x_esti, x_err))
+        it += 1
         if x_err <= err or it > N:
             break
 
@@ -147,8 +188,8 @@ if __name__ == '__main__':
         DWX = DW[:J]
 
         # Update w
-        dw = np.array(x_esti * DWX)[0]
-        w -= step * dw / np.linalg.norm(dw)
-        w = w / w[0]
-        it += 1
+        dth = np.array(x_esti * DWX * SphericalJoc(th))[0]
+        # th -= step * dth / np.linalg.norm(dth)
+        th -= step * dth
+        w = Spherical2Cartesian(th)
     print('Final Result: ', w, x_esti)
