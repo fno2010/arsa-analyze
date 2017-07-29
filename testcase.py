@@ -4,7 +4,7 @@ import json
 
 from mininet.log import info
 
-from util.link import create_access_link, create_bottleneck_link
+from util.link import create_access_link, create_bottleneck_link, create_core_link
 from util.cmd import SND_CMD, MON_CMD
 from util.case import Case
 
@@ -328,21 +328,30 @@ class ClosTopologyTest(Case):
         self.K = K / 2 * 2
         self.config = config
         self.json = json.load(config.json)
+        self.min_delay = 60
 
         Case.__init__(self)
+
+    def setup_network(self):
+        from mininet.net import Mininet
+        from mininet.node import OVSKernelSwitch, RemoteController
+        from mininet.link import TCLink
+
+        self.net = Mininet(switch=OVSKernelSwitch, link=TCLink)
+        self.net.addController("c1", controller=RemoteController, ip='127.0.0.1')
 
     def create_nodes(self):
         K = self.K
         K2 = self.K / 2
         # (k/2)^2 core switches
-        self.core = [[self.net.addSwitch('core%d%d' % (i,j), protocol='OpenFlow13')
+        self.core = [[self.net.addSwitch('core10%d%d' % (i,j), protocol='OpenFlow13')
                       for j in range(K2)]
                      for i in range(K2)]
 
-        self.aggr = [[self.net.addSwitch('aggr%d%d' % (i,j), protocol='OpenFlow13')
+        self.aggr = [[self.net.addSwitch('aggr20%d%d' % (i,j), protocol='OpenFlow13')
                       for j in range(K2)]
                      for i in range(K)]
-        self.edge = [[self.net.addSwitch('edge%d%d' % (i,j), protocol='OpenFlow13')
+        self.edge = [[self.net.addSwitch('edge30%d%d' % (i,j), protocol='OpenFlow13')
                       for j in range(K2)]
                      for i in range(K)]
 
@@ -351,25 +360,25 @@ class ClosTopologyTest(Case):
         for i in range(K): # pod
             for j in range(K2): # edge switch
                 for k in range(K2): # port
-                    self.hosts[(i,j,k)] = self.net.addSwitch('h%d%d%d' % (i,j,k),
+                    self.hosts[(i,j,k)] = self.net.addSwitch('h40%d%d%d' % (i,j,k),
                                                              protocol='OpenFlow13')
 
         # set up the links
         for i in range(K2):
             for j in range(K2):
                 for k in range(K):
-                    create_access_link(self.net,
-                                       self.core[i][j],
-                                       self.aggr[k][i],
-                                       self.config)
+                    create_core_link(self.net,
+                                     self.core[i][j],
+                                     self.aggr[k][i],
+                                     self.config)
 
         for i in range(K):
             for j in range(K2):
                 for k in range(K2):
-                    create_access_link(self.net,
-                                       self.aggr[i][j],
-                                       self.edge[i][k],
-                                       self.config)
+                    create_core_link(self.net,
+                                     self.aggr[i][j],
+                                     self.edge[i][k],
+                                     self.config)
 
         for i in range(K):
             for j in range(K2):
@@ -387,7 +396,9 @@ class ClosTopologyTest(Case):
             print si, sj, sk
             di, dj, dk = self.json[i]['to']
             print di, dj, dk
-            delay = self.json[i]['time'] if 'time' in self.json[i] else 5
+            delay = self.json[i]['time'] if 'time' in self.json[i] else 0
+            delay += self.min_delay
+
             sip = '10.%d.%d.%d' % (si, sj * K2 + sk, i+1)
             dip = '10.%d.%d.%d' % (di, dj * K2 + dk, i+1)
             sender = self.net.addHost('s%s%d' % (tcp, i), ip=sip)
