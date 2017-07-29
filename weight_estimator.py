@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import numpy as np
 from scipy.optimize import fmin_slsqp
@@ -131,65 +131,74 @@ def SphericalJoc(theta):
 
     return joc
 
-if __name__ == '__main__':
-    # A = np.mat([[1, 1, 0, 0, 1], [1, 0, 0, 1, 0], [0, 1, 1, 0, 0]])
-    A = np.mat([[0, 0, 1, 1], [1, 0, 0, 1], [0, 1, 1, 0]])
-    c = [1, 1, 1]
-    a = [1, 1, 1, 1]
-    # w = [1, 1, 1, 1]
-    # w = [1, 1, 1, 1, 1]
-    th = [np.arccos(1/np.sqrt(i)) for i in range(len(a), 1, -1)]
-    w = Spherical2Cartesian(th)
-    # w = [1., 1.4608004, 1.00000105, 1.46079935, 1.4608004]
-    K = len(c)
-    J = len(a)
-    # The real w should be [2, 1, 1]
-    x_real = [0.4, 0.6, 0.4, 0.6]
-    # x_real = [0.3, 0.3, 0.3, 0.3, 0.3]
-    # x_real = [0.272, 0.350, 0.571, 0.677, 0.342]
-    # x_real = [0.384, 0.571, 0.388, 0.567, 0.1]
-    x_esti = []
-    x_esti.extend(x_real)
-    # x_esti.extend([1, 1])
-    x_err = 0
+def Estimate(A, c, a, p0, x, iter=100, tol=0.01, step=0.01*np.pi, spherical=True):
+    _p0 = p0
 
-    N = 100
-    err = 0.01
-    step = 0.01 * np.pi
+    transform = lambda p: Spherical2Cartesian(p) if spherical else p
+    p0 = transform(_p0)
+
+    K = len(c) # The number of fully utilized links
+    J = len(a) # The number of flows
+
+    x_esti = x[:]
+    x_err = 0
 
     it = 0
     while True:
-        print('Before Iter %d: w=%s, x0=%s' % (it, w, x_esti))
+        print('Before Iter %d: p=%s, x0=%s' % (it, p0, x_esti))
 
         # Estimate x
-        # La = lambda x: -Lagrangian(A, c, a, w, x[:J], x[J:])
-        # res = minimize(La, x_esti, method='nelder-mead', options={'xtol': 1e-6, 'disp': True})
-        func_util = lambda x: -Utility(A, c, a, w, x)
-        func_jac = lambda x: -Jac(a, w, x)
-        # cons = Cons(A, c, a)
-        # res = minimize(func_util, x_esti, jac=func_jac, constraints=cons,
-        #                method='SLSQP', options={'disp': True})
+        func_util = lambda x: -Utility(A, c, a, p0, x)
+        func_jac = lambda x: -Jac(a, p0, x)
         cons_func = lambda x: ConsFunc(A, c, a, x)
         cons_joc = lambda x: ConsJoc(A, c, a, x)
-        x_esti = fmin_slsqp(func_util, x_real, fprime=func_jac,
-                         f_ieqcons=cons_func, fprime_ieqcons=cons_joc, disp=1)
-        x_err = np.linalg.norm(x_esti - x_real)
+        x_esti = fmin_slsqp(func_util, x, fprime=func_jac,
+                            f_ieqcons=cons_func, fprime_ieqcons=cons_joc, disp=1)
+        x_err = np.linalg.norm(x_esti - x)
 
         print('After Iter %d: x=%s, err=%f' % (it, x_esti, x_err))
         it += 1
-        if x_err <= err or it > N:
+        if x_err <= tol or it > iter:
             break
 
         # Compute \nabla x
-        D = np.bmat([[np.diag([w[j]*a[j]*np.power(x_esti[j], -a[j]-1) for j in range(J)]), A.T],
-                      [A, np.zeros((K, K))]])
-        C = np.bmat([[np.diag([np.power(x_esti[j], a[j]) for j in range(J)])], [np.mat(c).T * np.ones((1, J))]])
+        D = np.bmat([[np.diag([p0[j]*a[j]*np.power(x_esti[j], -a[j]-1)
+                               for j in range(J)]), A.T],
+                     [A, np.zeros((K, K))]])
+        C = np.bmat([[np.diag([np.power(x_esti[j], a[j]) for j in range(J)])],
+                     [np.mat(c).T * np.ones((1, J))]])
+        if np.linalg.det(D) == 0:
+            print('Error(-1): matrix D is not invertible. It is possible that matrix A has full 0 row or column.')
+            break
         DW = D.I * C
         DWX = DW[:J]
 
         # Update w
-        dth = np.array(x_esti * DWX * SphericalJoc(th))[0]
-        # th -= step * dth / np.linalg.norm(dth)
-        th -= step * dth
-        w = Spherical2Cartesian(th)
-    print('Final Result: ', w, x_esti)
+        if spherical:
+            _dp = 2 * np.array((x_esti - x) * DWX * SphericalJoc(_p0))[0]
+        else:
+            _dp = 2 * np.array((x_esti - x) * DWX)[0]
+        _p0 -= step * _dp
+        print('               dp=%s' % _dp)
+        p0 = transform(_p0)
+    print('Final Result: ', p0, x_esti)
+
+if __name__ == '__main__':
+    # A = np.mat([[1, 1, 0, 0, 1], [1, 0, 0, 1, 0], [0, 1, 1, 0, 0]])
+    A = np.mat([[1, 1, 0, 0], [1, 0, 0, 1], [0, 1, 1, 0]])
+    # A = np.mat([[1, 1, 0, 0],
+    #             [0, 0, 1, 0],
+    #             [0, 0, 0, 1],
+    #             [1, 0, 0, 1],
+    #             [0, 1, 1, 0]])
+    c = [1] * A.shape[0]
+    a = [1] * A.shape[1]
+    th = [np.arccos(1/np.sqrt(i)) for i in range(len(a), 1, -1)]
+    w = Spherical2Cartesian(th)
+    # w = [0.3689225,   0.58480591,  0.43720717,  0.57510706, 0.58480591]
+    # x_real = [0.272, 0.350, 0.571, 0.677, 0.342]
+    x_real = [0.384, 0.571, 0.388, 0.567]
+
+    Estimate(A, c, a, th, x_real)
+    # Iter=0 for prediction
+    # Estimate(A, c, a, w, x_real, iter=0, spherical=False)
