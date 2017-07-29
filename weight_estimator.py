@@ -3,36 +3,36 @@
 import numpy as np
 from scipy.optimize import fmin_slsqp
 
-def Utility(A, c, a, w, x):
+def Utility(A, c, a, p, x):
     """
     A: routing matrix
     c: capacity vector
     alpha: vector of base utility factors
-    w: vector of weight factors
+    p: vector of scaling factors
     x: equilibrium bandwidth
     """
     A = np.array(A)
     J = len(a)
     K = len(c)
     assert A.shape == (K, J)
-    assert len(w) == J
+    assert len(p) == J
     assert len(x) == J
 
     L = 0
     for j in range(J):
         if a[j] == 1:
-            L += w[j] * np.log(x[j])
+            L += p[j] * np.log(x[j])
         else:
-            L += w[j] * np.power(x[j], 1-a[j]) / (1-a[j])
+            L += p[j] * np.power(x[j], 1-a[j]) / (1-a[j])
 
     return L
 
-def Jac(a, w, x):
+def Jac(a, p, x):
     J = len(a)
-    assert len(w) == J
+    assert len(p) == J
     assert len(x) == J
 
-    return np.array([w[j] * np.power(x[j], -a[j]) for j in range(J)])
+    return np.array([p[j] * np.power(x[j], -a[j]) for j in range(J)])
 
 def Cons(A, c, a):
     A = np.array(A)
@@ -80,19 +80,19 @@ def ConsJoc(A, c, a, x):
         -A[k] for k in range(K)
     ])
 
-def Lagrangian(A, c, a, w, x, _lambda):
+def Lagrangian(A, c, a, p, x, _lambda):
     """
     A: routing matrix
     c: capacity vector
     alpha: vector of base utility factors
-    w: vector of weight factors
+    p: vector of scaling factors
     x: equilibrium bandwidth
     _lambda: Lagrange Multiplier
     """
     K = len(c)
     assert len(_lambda) == K
 
-    L = Utility(A, c, a, w, x)
+    L = Utility(A, c, a, p, x)
 
     for k in range(K):
         L -= _lambda[k] * (np.dot(A[k], x) - c[k])
