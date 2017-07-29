@@ -182,23 +182,30 @@ def Estimate(A, c, a, p0, x, iter=100, tol=0.01, step=0.01*np.pi, spherical=True
         print('               dp=%s' % _dp)
         p0 = transform(_p0)
     print('Final Result: ', p0, x_esti)
+    return p0, x_esti
 
 if __name__ == '__main__':
-    # A = np.mat([[1, 1, 0, 0, 1], [1, 0, 0, 1, 0], [0, 1, 1, 0, 0]])
+    # Training phase
     A = np.mat([[1, 1, 0, 0], [1, 0, 0, 1], [0, 1, 1, 0]])
-    # A = np.mat([[1, 1, 0, 0],
-    #             [0, 0, 1, 0],
-    #             [0, 0, 0, 1],
-    #             [1, 0, 0, 1],
-    #             [0, 1, 1, 0]])
     c = [1] * A.shape[0]
     a = [1] * A.shape[1]
     th = [np.arccos(1/np.sqrt(i)) for i in range(len(a), 1, -1)]
     w = Spherical2Cartesian(th)
-    # w = [0.3689225,   0.58480591,  0.43720717,  0.57510706, 0.58480591]
-    # x_real = [0.272, 0.350, 0.571, 0.677, 0.342]
-    x_real = [0.384, 0.571, 0.388, 0.567]
+    x_real = [ 0.54880000000000004, 0.45199999999999996, 0.54800000000000004, 0.42960000000000003 ]
 
-    Estimate(A, c, a, th, x_real)
+    w_esti, x_esti = Estimate(A, c, a, th, x_real, iter=300)
+
+    # Prediction phase
+    A = np.mat([[1, 1, 0, 0, 1], [1, 0, 0, 1, 0], [0, 1, 1, 0, 0]])
+    c = [1] * A.shape[0]
+    a = [1] * A.shape[1]
+    w_esti.resize(len(a), refcheck=False)
+    w_esti[-1] = w_esti[1]
+    x_real = [ 0.352, 0.32400000000000002, 0.47599999999999998, 0.62880000000000003, 0.32400000000000002 ]
+
     # Iter=0 for prediction
-    # Estimate(A, c, a, w, x_real, iter=0, spherical=False)
+    w_esti, x_esti = Estimate(A, c, a, w_esti, x_real, iter=0, spherical=False)
+    abs_err = x_esti - x_real
+    rel_err = abs_err / x_real
+    print('Absolute error = %s' % (abs_err))
+    print('Related error = %s' % (rel_err))
