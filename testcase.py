@@ -212,20 +212,39 @@ class LinearMixTCPTest(Case):
 
     Require advanced JSON configuration file.
 
-    Example parameters.json:
+    Example settings.json:
 
     [
       {"tcp": "vegas", "from": 0, "to": 1},
       {"tcp": "vegas", "from": 1, "to": 2},
       {"tcp": "bbr", "from": 0, "to": 2}
     ]
+
+    Example advanced-settings.json:
+
+    {
+      "capacity": [2, 1],
+      "flow": [
+        {"tcp": "vegas", "from": 0, "to": 1},
+        {"tcp": "vegas", "from": 1, "to": 2},
+        {"tcp": "reno", "from": 0, "to": 2}
+      ]
+    }
     """
 
     def __init__(self, config):
         self.config = config
         self.json = json.load(config.json)
-        self.N = max([max(x['from'], x['to']) for x in self.json]) + 1
-        self.F = len(self.json)
+        if type(self.json) == list:
+            self.flow = self.json
+            self.capacity = []
+        else:
+            self.flow = self.json['flow']
+            self.capacity = self.json['capacity']
+        self.N = max([max(x['from'], x['to']) for x in self.flow]) + 1
+        self.F = len(self.flow)
+        if not self.capacity:
+            self.capacity = [self.config.bw] * self.N
         Case.__init__(self)
 
     def create_nodes(self):
@@ -233,10 +252,10 @@ class LinearMixTCPTest(Case):
                      for i in range(self.N)]
         self.host = [
             {
-                'tcp': self.json[i]['tcp'],
-                'src': self.net.addHost('s%s%d' % (self.json[i]['tcp'][:5], i),
+                'tcp': self.flow[i]['tcp'],
+                'src': self.net.addHost('s%s%d' % (self.flow[i]['tcp'][:5], i),
                                         ip='10.0.1.%d' % (i+1)),
-                'dst': self.net.addHost('d%s%d' % (self.json[i]['tcp'][:5], i),
+                'dst': self.net.addHost('d%s%d' % (self.flow[i]['tcp'][:5], i),
                                         ip='10.0.2.%d' % (i+1))
             } for i in range(self.F)
         ]
@@ -244,12 +263,12 @@ class LinearMixTCPTest(Case):
     def config_nodes(self):
         for i in range(self.N - 1):
             create_bottleneck_link(self.net, self.core[i], self.core[i + 1],
-                                   self.config)
+                                   self.config, bw=self.capacity[i])
 
         for i in range(self.F):
-            create_access_link(self.net, self.core[self.json[i]['from']],
+            create_access_link(self.net, self.core[self.flow[i]['from']],
                                self.host[i]['src'], self.config)
-            create_access_link(self.net, self.core[self.json[i]['to']],
+            create_access_link(self.net, self.core[self.flow[i]['to']],
                                self.host[i]['dst'], self.config)
 
         Case.config_nodes(self)
@@ -273,15 +292,20 @@ class LinearMixTCPTest(Case):
         info('=' * 25 + ' Report ' + '=' * 25 + '\n')
 
         info('=' * 20 + ' Config ' + '=' * 20 + '\n')
-        for tcp in self.json:
+        info('===> Capacity <===\n')
+        for i in range(self.N-1):
+            info('capacity of link (%d -> %d): %d Mbps\n' % (i, i+1,
+                                                             self.capacity[i]))
+        info('===> Flow <===\n')
+        for tcp in self.flow:
             info(str(tcp) + '\n')
 
         info('=' * 20 + ' Result ' + '=' * 20 + '\n')
         for i in range(self.F):
             info('\n===> flow #%d (%s, %d -> %d): <===\n\n' % (i,
-                                                               self.json[i]['tcp'],
-                                                               self.json[i]['from'],
-                                                               self.json[i]['to']))
+                                                               self.flow[i]['tcp'],
+                                                               self.flow[i]['from'],
+                                                               self.flow[i]['to']))
             for l in open('%d.log' % i, 'r').readlines()[-5:-2]:
                 info(l)
 
