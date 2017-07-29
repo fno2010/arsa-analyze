@@ -21,9 +21,6 @@ class ModifiedClosTopologyTest(ClosTopologyTest):
 
         Case.__init__(self)
 
-    # def setup_network(self):
-    #     Case.setup_network(self)
-
     def result(self):
         rate = []
         for i in range(len(self.flows)):
@@ -65,6 +62,7 @@ def UpdateFlows(K, flows, rho, x):
     new_flow['to'] = [new_di, new_dj, new_dk]
 
     flows.append(new_flow)
+    rho = rho.tolist()
     rho.append(rho[sel])
     x.append(1e-2)
     return flows, rho, x
@@ -97,7 +95,7 @@ def RoutingMatrix(flows):
             lp = links[kp]
             s = signal(l, lp)
             if s < 2:
-                _links.remove(lp)
+                _links.remove(kp)
             elif s == 2:
                 valid = False
                 break
@@ -118,63 +116,63 @@ if __name__ == '__main__':
 
     F = 10
     K = 4
-    log_file.write('Start %d flows in Clos topology (K=%d):' % (F, K))
+    log_file.write('Start %d flows in Clos topology (K=%d):\n' % (F, K))
 
     flows = RandomFlows(F, K)
-    log_file.write('Flows:')
-    log_file.write(flows)
+    log_file.write('Flows:\n')
+    log_file.write('%s\n' % flows)
 
-    log_file.write('Testing...')
+    log_file.write('Testing...\n')
     test = ModifiedClosTopologyTest(K, config, flows)
-    log_file.write('Done!')
+    log_file.write('Done!\n')
 
     x = test.result()
-    log_file.write('Equilibrium rates: %s' % x)
+    log_file.write('Equilibrium rates: %s\n' % x)
 
-    log_file.write('Setup the training environment...')
+    log_file.write('Setup the training environment...\n')
     A = RoutingMatrix(flows)
-    log_file.write('Routing Matrix: %s' % A)
+    log_file.write('Routing Matrix:\n%s\n' % A)
     c = [1] * A.shape[0]
-    log_file.write('Capacity Vector: %s' % c)
+    log_file.write('Capacity Vector: %s\n' % c)
     a = [1] * A.shape[1]
-    log_file.write('Utility Factors: %s' % a)
+    log_file.write('Utility Factors: %s\n' % a)
     theta = [np.arccos(1/np.sqrt(i)) for i in range(len(a), 1, -1)]
-    log_file.write('Initial Spherical Scaling Factors: %s' % theta)
+    log_file.write('Initial Spherical Scaling Factors: %s\n' % theta)
     rho = Spherical2Cartesian(theta)
-    log_file.write('Initial Scaling Factors: %s' % rho)
+    log_file.write('Initial Scaling Factors: %s\n' % rho)
 
-    log_file.write('Training the scaling factors...')
+    log_file.write('Training the scaling factors...\n')
     new_rho, new_x = Estimate(A, c, a, theta, x)
 
-    log_file.write('The estimated scaling factor: %s' % new_rho)
-    log_file.write('The estimated error on flow rates: %s' % ((new_x - x)/x))
+    log_file.write('The estimated scaling factor: %s\n' % new_rho)
+    log_file.write('The estimated error on flow rates: %s\n' % ((new_x - x)/x))
 
-    log_file.write('Updating running flows...')
+    log_file.write('Updating running flows...\n')
     flows, new_rho, x = UpdateFlows(K, flows, new_rho, x)
-    log_file.write('Flows:')
-    log_file.write(flows)
+    log_file.write('Flows:\n')
+    log_file.write('%s\n' % flows)
 
-    log_file.write('Setup the prediction environment...')
+    log_file.write('Setup the prediction environment...\n')
     A = RoutingMatrix(flows)
-    log_file.write('Routing Matrix: %s' % A)
+    log_file.write('Routing Matrix:\n%s\n' % A)
     c = [1] * A.shape[0]
-    log_file.write('Capacity Vector: %s' % c)
+    log_file.write('Capacity Vector: %s\n' % c)
     a = [1] * A.shape[1]
-    log_file.write('Utility Factors: %s' % a)
-    log_file.write('Estimated Scaling Factors: %s' % new_rho)
+    log_file.write('Utility Factors: %s\n' % a)
+    log_file.write('Estimated Scaling Factors: %s\n' % new_rho)
 
-    log_file.write('Predicting the equilibrium flow rates...')
+    log_file.write('Predicting the equilibrium flow rates...\n')
     new_rho, new_x = Estimate(A, c, a, new_rho, x, iter=0, spherical=False)
-    log_file.write('The estimated equilibrium flow rates: %s' % new_x)
+    log_file.write('The estimated equilibrium flow rates: %s\n' % new_x)
 
-    log_file.write('Validating the prediction...')
-    log_file.write('Testing...')
+    log_file.write('Validating the prediction...\n')
+    log_file.write('Testing...\n')
     new_test = ModifiedClosTopologyTest(K, config, flows)
-    log_file.write('Done!')
+    log_file.write('Done!\n')
 
     x = new_test.result()
-    log_file.write('The real equilibrium rates: %s' % x)
+    log_file.write('The real equilibrium rates: %s\n' % x)
 
-    log_file.write('The estimated error on flow rates: %s' % ((new_x - x)/x))
+    log_file.write('The estimated error on flow rates: %s\n' % ((new_x - x)/x))
 
     log_file.close()
