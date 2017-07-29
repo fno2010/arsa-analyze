@@ -393,9 +393,7 @@ class ClosTopologyTest(Case):
         for i in range(len(self.json)):
             tcp = self.json[i]['tcp']
             si, sj, sk = self.json[i]['from']
-            print si, sj, sk
             di, dj, dk = self.json[i]['to']
-            print di, dj, dk
             delay = self.json[i]['time'] if 'time' in self.json[i] else 0
             delay += self.min_delay
 
@@ -428,7 +426,6 @@ class ClosTopologyTest(Case):
             send_cmd = SND_CMD % (dip, self.config.duration,
                                   tcp, self.config.mss, cnt)
             cnt += 1
-            print sip, dip, send_cmd
 
             receiver.cmd(recv_cmd)
             sender.cmd('sleep %d && %s &' % (delay, send_cmd))

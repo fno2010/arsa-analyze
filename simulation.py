@@ -58,12 +58,14 @@ def parse_argument():
                          help ='Increase verbosity to trace import statements')
     return cmdline
 
-
-if __name__ == '__main__':
+def simulate(args):
     setLogLevel('info')
     cmdline = parse_argument()
-    config = cmdline.parse_args(sys.argv[1:])
+    config = cmdline.parse_args(args)
 
     if config.verbose:
         setLogLevel('debug')
     eval_arsa(config.n_source, config)
+
+if __name__ == '__main__':
+    simulate(sys.argv[1:])

@@ -55,7 +55,6 @@ class Case(object):
             self.waiting_time -= 1
         info(CLEAR_LINE)
         info(u'Done \u2714\n')
-        CLI(self.net)
 
     def clean_up(self):
         """
@@ -66,3 +65,5 @@ class Case(object):
         os.system('pkill "tcpdump*"')
         info('Exiting mininet...\n')
         self.net.stop()
+
+        sleep(5)
