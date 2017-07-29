@@ -52,7 +52,7 @@ def analyze_flows(flows, throughput_file):
                 m = re.search('(\d+) ([MmKk])bits/sec', line)
                 v, u = float(m.group(1)), m.group(2).upper()
                 unit = 10**9 if u == 'G' else 10**6 if u == 'M' else 10**3
-                throughput += [str(v * unit)]
+                throughput += [str(v * unit) + '\n']
 
     with open(throughput_file, 'w') as f:
         f.writelines(throughput)
