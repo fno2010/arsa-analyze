@@ -319,8 +319,8 @@ class ClosTopologyTest(Case):
     Example parameters.json:
 
     [
-    {"tcp": "vegas", "from": [0,0,0], "to": [0,0,1], "time": 50},
-    {"tcp": "vegas", "from": [0,1,0], "to": [0,0,1]}
+      {"tcp": "vegas", "from": [0,0,0], "to": [0,0,1], "time": 50},
+      {"tcp": "vegas", "from": [0,1,0], "to": [0,0,1]}
     ]
     """
 
