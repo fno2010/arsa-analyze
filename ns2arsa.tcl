@@ -6,9 +6,9 @@ proc finish {} {
         exit 0
 }
 
-source TraceApp.tcl
+source arsa/TraceApp.tcl
 
-source clos.tcl
+source arsa/clos.tcl
 
 #Run the simulation
 $ns run

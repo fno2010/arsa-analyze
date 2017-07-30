@@ -1,8 +1,10 @@
 #!/usr/bin/env python2.7
 
 from __future__ import print_function
-import sys, json
+import sys, json, os, re
 from util.arsaconf import parse_argument
+
+ns2file = 'clos.tcl'
 
 def configure_node(sw, f):
     print('set %s [$ns node]' % sw, file=f)
@@ -42,10 +44,10 @@ def configure_tcp(idx, src, dst, tcp, config, f):
     print('$ns at 0.0 \"plotThroughput %d $t%d $trace_file\"' %(idx, idx), file=f)
 
 def configure_ns2(trace_file, config, f):
-    print('set trace_file [open \"%s\" w]' % (trace_file), file=f)
+    print('set trace_file [open \"arsa/%s\" w]' % (trace_file), file=f)
     print('$ns at %.2f \"finish\"' % (config.duration + 10), file=f)
 
-def generate_ns2(N, K, flows, config, trace_file, f):
+def generate_ns2(K, flows, config, trace_file, f):
     configure_ns2(trace_file, config, f)
     # create nodes
     K2 = K / 2
@@ -89,18 +91,34 @@ def generate_ns2(N, K, flows, config, trace_file, f):
         src, dst, tcp = host[(si, sj, sk)], host[(di, dj, dk)], flow['tcp']
         configure_tcp(i, src, dst, tcp, config, f)
 
+def execute_ns2(trace_file, thpt_file):
+    cmd = ['docker', 'run', '--rm', '-it', '-v', '$PWD:/ns2/ns-2.35/arsa',
+           'ekiourk/ns2:latest', 'ns', 'arsa/ns2arsa.tcl']
+    os.system(' '.join(cmd))
+    throughputs = []
+    with open(trace_file, 'r') as f:
+        for l in f.readlines():
+            m = re.search('(\d+) 22 (.+)', l)
+            if m is None:
+                continue
+            throughputs += [float(m.group(2))]
+
+    with open(thpt_file, 'w') as f:
+        for bw in throughputs:
+            print(bw, file=f)
+    return throughputs
+
 if __name__ == '__main__':
     cmd = parse_argument()
-    ns2file = 'clos.tcl'
 
-    K, flow_file, trace_file = sys.argv[1:4]
+    K, flow_file, trace_file, thpt_file = sys.argv[1:5]
     K = int(K)
-    config = cmd.parse_args(sys.argv[4:])
-
-    N = config.n_source
+    config = cmd.parse_args(sys.argv[5:])
 
     with open(flow_file, 'r') as f:
         flows = json.load(f)
 
     with open(ns2file, 'w') as f:
-        generate_ns2(N, K, flows, config, trace_file, f)
+        generate_ns2(K, flows, config, trace_file, f)
+
+    execute_ns2(trace_file, thpt_file)
