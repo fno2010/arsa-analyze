@@ -7,10 +7,10 @@ import numpy as np
 from random import randint
 
 from mininet.log import setLogLevel
-from simulation import parse_argument
+from estimator import Spherical2Cartesian, Estimate
 from testcase import ClosTopologyTest
+from util.arsaconf import parse_argument
 from util.case import Case
-from weight_estimator import Spherical2Cartesian, Estimate
 
 class ModifiedClosTopologyTest(ClosTopologyTest):
     def __init__(self, K, config, json):
