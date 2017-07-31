@@ -35,6 +35,9 @@ def generate_predict_flows(L, te, flows, prefix):
         bflows = trflows[random.randint(0, len(trflows)-1)]
         conf_file = '%stest-%d.json' % (prefix, i)
         with open(conf_file, 'w') as f:
+            json.dump(tflows + bflows, f)
+        conf_file = '%squery-%d.json' % (prefix, i)
+        with open(conf_file, 'w') as f:
             json.dump(tflows, f)
         flows += [tflows + bflows]
 
