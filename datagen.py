@@ -11,14 +11,14 @@ TRAIN_MATRIX_FP = '%strain-%d.matrix'
 TEST_CONF_FP = '%stest-%d.json'
 TEST_MATRIX_FP = '%stest-%d.matrix'
 
-def generate_training_flows(N, K, tr, prefix):
+def generate_training_flows(N, K, tr, prefix, multi_tcp=False):
     N = random.randint(int(N/2), N)
     flows = []
     for i in range(tr):
         print('training %s' % i)
         conf_file = TRAIN_CONF_FP % (prefix, i)
         matrix_file = TRAIN_MATRIX_FP % (prefix, i)
-        flows += [generate_flows(N, K, conf_file, matrix_file)]
+        flows += [generate_flows(N, K, conf_file, matrix_file, multi_tcp=multi_tcp)]
 
     return flows
 
@@ -27,14 +27,16 @@ def generate_predict_flows(L, te, flows, prefix):
     all_flows = [flows[i][j]
                  for i in range(len(flows))
                  for j in range(len(flows[i]))]
+    trflows = flows
     flows = []
     for i in range(te):
         print('testing %s' % i)
         tflows = random.sample(all_flows, L)
+        bflows = trflows[random.randint(0, len(trflows)-1)]
         conf_file = '%stest-%d.json' % (prefix, i)
         with open(conf_file, 'w') as f:
             json.dump(tflows, f)
-        flows += [tflows]
+        flows += [tflows + bflows]
 
     return flows
 
@@ -56,7 +58,7 @@ if __name__ == '__main__':
 
     config = cmd.parse_args(sys.argv[6:])
 
-    tr_flows = generate_training_flows(N * 2, K, tr, prefix)
+    tr_flows = generate_training_flows(N * 2, K, tr, prefix, multi_tcp=config.multi_tcp)
     run_flows(K, prefix, 'train', tr_flows, config)
     te_flows = generate_predict_flows(N, te, tr_flows, prefix)
     run_flows(K, prefix, 'test', te_flows, config)

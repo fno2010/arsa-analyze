@@ -1,7 +1,6 @@
 #!/usr/bin/env python2.7
 
-
-def generate_flows(N, K, conf_file, matrix_file):
+def generate_flows(N, K, conf_file, matrix_file, multi_tcp=False):
     from random import sample
     import json
 
@@ -20,7 +19,10 @@ def generate_flows(N, K, conf_file, matrix_file):
         a[s] = a[d + L] = 1
         A += [a]
         s, d = breakdown(s), breakdown(d)
-        flows += [{'tcp': 'vegas', 'from': s, 'to': d}]
+        if multi_tcp:
+            flows += [{'tcp': 'vegas' if s[2] % 2 else 'reno', 'from': s, 'to': d}]
+        else:
+            flows += [{'tcp': 'vegas', 'from': s, 'to': d}]
 
     with open(conf_file, 'w') as f:
         json.dump(flows, f)

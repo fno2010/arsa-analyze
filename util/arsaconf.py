@@ -9,6 +9,8 @@ def parse_argument():
     cmdline.add_argument('--tcp', dest='tcp', action='store',
                          default="reno",
                          help='TCP version to be used (default: reno).')
+    cmdline.add_argument('--multi-tcp', dest='multi_tcp', action='store_true',
+                         help='Run multiple TCP versions.')
     cmdline.add_argument('--test', dest='test', action='store',
                          default="single",
                          help='Testcase to be evaluated (default: single).')
