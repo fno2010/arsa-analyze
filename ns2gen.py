@@ -21,7 +21,7 @@ def configure_bottleneck_link(sw1, sw2, config, f, bw=None, delay=None):
     print('$ns duplex-link $%s $%s %s %s DropTail'
           % (sw1, sw2, bw, delay), file=f)
 
-def configure_tcp(idx, src, dst, tcp, config, f):
+def configure_tcp(idx, src, dst, tcp, duration, f):
     # set up tcp connection
     print('set s%d [new Agent/TCP/%s]' % (idx, tcp.capitalize()), file=f)
     print('set d%d [new Agent/TCPSink]' % (idx), file=f)
@@ -31,11 +31,12 @@ def configure_tcp(idx, src, dst, tcp, config, f):
     print('$s%d set fid_ %d' % (idx, idx), file=f)
 
     # set up FTP
+    start, end = duration
     print('set f%d [new Application/FTP]' % (idx), file=f)
     print('$f%d attach-agent $s%d' % (idx, idx), file=f)
     print('$f%d set type_ FTP' % (idx), file=f)
-    print('$ns at 1.0 \"$f%d start\"' % (idx), file=f)
-    print('$ns at %.2f \"$f%d stop\"' % (config.duration + 1, idx), file=f)
+    print('$ns at %.2f \"$f%d start\"' % (start, idx), file=f)
+    print('$ns at %.2f \"$f%d stop\"' % (end, idx), file=f)
 
     # set up monitor app
     print('set t%d [new TraceApp]' % (idx), file=f)
@@ -47,7 +48,7 @@ def configure_ns2(trace_file, config, f):
     print('set trace_file [open \"arsa/%s\" w]' % (trace_file), file=f)
     print('$ns at %.2f \"finish\"' % (config.duration + 10), file=f)
 
-def generate_ns2(K, flows, config, trace_file, f):
+def generate_ns2(K, config, trace_file, f):
     configure_ns2(trace_file, config, f)
     # create nodes
     K2 = K / 2
@@ -83,29 +84,38 @@ def generate_ns2(K, flows, config, trace_file, f):
     for e, h in edge2host:
         configure_bottleneck_link(e, h, config, f)
 
+    return core, aggr, edge, host
+
+def add_flows(flows, host, duration, f):
     # tcp connections
     for i in range(len(flows)):
         flow = flows[i]
         si, sj, sk = flow['from']
         di, dj, dk = flow['to']
         src, dst, tcp = host[(si, sj, sk)], host[(di, dj, dk)], flow['tcp']
-        configure_tcp(i, src, dst, tcp, config, f)
+        configure_tcp(i, src, dst, tcp, duration, f)
 
-def execute_ns2(trace_file, thpt_file):
+def execute_ns2(trace_file, prefix, samples):
     cmd = ['docker', 'run', '--rm', '-it', '-v', '$PWD:/ns2/ns-2.35/arsa',
            'ekiourk/ns2:latest', 'ns', 'arsa/ns2arsa.tcl']
     os.system(' '.join(cmd))
-    throughputs = []
+    throughputs = {}
     with open(trace_file, 'r') as f:
         for l in f.readlines():
-            m = re.search('(\d+) 22 (.+)', l)
-            if m is None:
-                continue
-            throughputs += [float(m.group(2))]
+            for t in samples:
+                m = re.search('(\d+) %d (.+)' % samples[t], l)
+                if m is None:
+                    continue
+                if t in throughputs:
+                    throughputs[t] += [float(m.group(2))]
+                else:
+                    throughputs[t] = [float(m.group(2))]
 
-    with open(thpt_file, 'w') as f:
-        for bw in throughputs:
-            print(bw, file=f)
+    for t in throughputs:
+        thpt_file = '%s%s.nsout' % (prefix, t)
+        with open(thpt_file, 'w') as f:
+            for bw in throughputs[t]:
+                print(bw, file=f)
     return throughputs
 
 if __name__ == '__main__':
@@ -119,6 +129,7 @@ if __name__ == '__main__':
         flows = json.load(f)
 
     with open(ns2file, 'w') as f:
-        generate_ns2(K, flows, config, trace_file, f)
+        c, a, e, h = generate_ns2(K, config, trace_file, f)
+        add_flows(flows, h, [0, config.duration+1], f)
 
     execute_ns2(trace_file, thpt_file)
