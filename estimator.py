@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
 import numpy as np
-from scipy.optimize import fmin_slsqp
+from scipy.optimize import fmin_slsqp, least_squares
 
 from util.const import TCP_ALPHA
+from util.cmd import RED
 
 def Utility(A, c, alpha, rho, x, rho_idx=None):
     """
@@ -98,64 +99,75 @@ def SphericalJoc(theta):
 
     return joc
 
-def Estimate(A, c, alpha, p0, x, p0_idx=None,
-             iter=100, tol=0.01, step=0.01*np.pi, spherical=True):
+def EstimateX(A, c, alpha, p0, x, p0_idx=None, spherical=True):
     _p0 = p0
-
     transform = lambda p: Spherical2Cartesian(p) if spherical else p
     p0 = transform(_p0)
 
-    K = len(c) # The number of fully utilized links
+    func_util = lambda x: -Utility(A, c, alpha, p0, x, p0_idx)
+    func_jac = lambda x: -Jac(alpha, p0, x, p0_idx)
+    cons_func = lambda x: ConsFunc(A, c, x)
+    cons_joc = lambda x: ConsJoc(A, c, x)
+    x_esti = fmin_slsqp(func_util, x, fprime=func_jac,
+                        f_ieqcons=cons_func, fprime_ieqcons=cons_joc, disp=0)
+    return x_esti
+
+def ErrorFunc(A, c, alpha, p0, x, p0_idx=None, spherical=True):
+    x_esti = EstimateX(A, c, alpha, p0, x, p0_idx, spherical)
+    # abs_err = x_esti - x
+    # rel_err = abs_err / x
+    # print(RED('absolute err=%s' % (abs_err)))
+    # print(RED('relative err=%s' % (rel_err)))
+    x_err = np.linalg.norm((x_esti - x)/x)**2
+    return x_err
+
+def ErrorJac(A, c, alpha, p0, x, p0_idx=None, spherical=True):
+    _p0 = p0
+    transform = lambda p: Spherical2Cartesian(p) if spherical else p
+    p0 = transform(_p0)
+    P = len(p0)
+
+    K = len(c)
+    J = len(alpha)
+    p0_idx = p0_idx or range(J)
+    x_esti = EstimateX(A, c, alpha, p0, x, p0_idx, spherical=False)
+    La = np.diag([p0[p0_idx[j]]*alpha[j]*np.power(x_esti[j], -alpha[j]-1)
+                  for j in range(J)])
+    D = np.bmat([[La, A.T],
+                 [A, np.zeros((K, K))]])
+    CX = np.zeros((J, P))
+    for j, i in np.ndindex(CX.shape):
+        if p0_idx[j] == i:
+            CX[j, i] = np.power(x_esti[j], -alpha[j])
+
+    C = np.bmat([[CX],
+                 [np.mat(c).T * np.ones((1, P))]])
+    if np.linalg.det(D) == 0:
+        print(RED('Error(-1): matrix D is not invertible. It is possible that matrix A has full 0 row or column.'))
+        return np.zeros(len(_p0))
+    DW = D.I * C
+    DWX = DW[:J]
+
+    # Update p0
+    dp = (x_esti/x - 1) / x * DWX
+    if spherical:
+        dp = dp * SphericalJoc(_p0)
+    return 2 * np.array(dp)[0]
+
+def Estimate(A, c, alpha, p0, x, p0_idx=None,
+             iter=100, tol=0.01, step=0.01*np.pi, spherical=True):
     J = len(alpha) # The number of flows
     p0_idx = p0_idx or range(J)
+    p0_bound = ([1e-6]*len(p0), [np.pi/2-1e-6]*len(p0))
 
-    x_esti = x[:]
-    x_err = 0
+    error_func = lambda p: ErrorFunc(A, c, alpha, p, x, p0_idx, spherical)
+    error_jac = lambda p: ErrorJac(A, c, alpha, p, x, p0_idx, spherical)
+    res = least_squares(error_func, p0, jac=error_jac, bounds=p0_bound)
+    p_esti = res.x
+    err = res.cost
 
-    it = 0
-    while True:
-        print('Before Iter %d: p=%s, x0=%s' % (it, p0, x))
-
-        # Estimate x
-        func_util = lambda x: -Utility(A, c, alpha, p0, x, p0_idx)
-        func_jac = lambda x: -Jac(alpha, p0, x, p0_idx)
-        cons_func = lambda x: ConsFunc(A, c, x)
-        cons_joc = lambda x: ConsJoc(A, c, x)
-        x_esti = fmin_slsqp(func_util, x, fprime=func_jac,
-                            f_ieqcons=cons_func, fprime_ieqcons=cons_joc, disp=1)
-        x_err = np.linalg.norm(x_esti - x)
-
-        print('After Iter %d: x=%s, err=%f' % (it, x_esti, x_err))
-        it += 1
-        if x_err <= tol or it > iter:
-            break
-
-        # Compute \nabla x
-        D = np.bmat([[np.diag([p0[j]*alpha[j]*np.power(x_esti[j], -alpha[j]-1)
-                               for j in range(J)]), A.T],
-                     [A, np.zeros((K, K))]])
-        CX = np.zeros((J, len(p0)))
-        for j, i in np.ndindex(CX.shape):
-            if p0_idx[j] == i:
-                CX[j, i] = np.power(x_esti[j], -alpha[j])
-        C = np.bmat([[CX],
-                     [np.mat(c).T * np.ones((1, len(p0)))]])
-        if np.linalg.det(D) == 0:
-            print('Error(-1): matrix D is not invertible. It is possible that matrix A has full 0 row or column.')
-            break
-        DW = D.I * C
-        DWX = DW[:J]
-
-        # Update p0
-        if spherical:
-            _dp = 2 * np.array((x_esti/x - 1) / x * DWX * SphericalJoc(_p0))[0]
-        else:
-            _dp = 2 * np.array((x_esti/x - 1) / x * DWX)[0]
-        _p0 -= step * _dp
-        print('               dp=%s' % _dp)
-        p0 = transform(_p0)
-    print('Final Result: ', p0, x_esti)
-    return _p0, x_esti
+    # print('Final Result: ', p_esti, err)
+    return p_esti, err
 
 def RoutingMatrix(flows):
     links = {}
@@ -213,7 +225,7 @@ def RhoIndex(flows, K, method='sender-hc'):
             rho_idx[i] = tcp_idx[tcp] * T + hc
     return rho_idx
 
-def Train(samples, K=4):
+def Train(samples, K=4, theta=None):
     """
     samples: A list of samples.
     K: The scale of Clos topology. (default: 4)
@@ -229,7 +241,8 @@ def Train(samples, K=4):
     K = K2*2
     RHO = K * K2 * K2 * 3
     # theta = np.pi/2 * np.random.random(RHO)
-    theta = [np.arccos(1/np.sqrt(i)) for i in range(RHO, 1, -1)]
+    if (type(theta) == np.ndarray and len(theta)) or not theta:
+        theta = [np.arccos(1/np.sqrt(i)) for i in range(RHO, 1, -1)]
     for sample in samples:
         flows = sample['flows']
         x = sample['rates']
@@ -239,9 +252,10 @@ def Train(samples, K=4):
         alpha = [TCP_ALPHA[flows[i]['tcp']] for i in range(F)]
         rho_idx = RhoIndex(flows, K)
 
-        theta, new_x = Estimate(A, c, alpha, theta, x, p0_idx=rho_idx, step=0.001*np.pi)
+        theta, err = Estimate(A, c, alpha, theta, x, p0_idx=rho_idx)
+        print(RED('Total relative error = %s' % (err)))
     rho = Spherical2Cartesian(theta)
-    return rho
+    return rho, theta
 
 def Predict(flows, rho, K=4):
     K2 = K//2
@@ -253,8 +267,77 @@ def Predict(flows, rho, K=4):
     rho_idx = RhoIndex(flows, K)
     x0 = np.array([1.]*F) / F
 
-    rho, x = Estimate(A, c, alpha, rho, x0, p0_idx=rho_idx, iter=0, spherical=False)
+    x = EstimateX(A, c, alpha, rho, x0, p0_idx=rho_idx, spherical=False)
     return x
+
+def ErrorFuncNg(As, cs, alphas, p0, xs, p0_idxs=None, spherical=True):
+    x_err = 0
+    for i in range(len(As)):
+        A = As[i]
+        c = cs[i]
+        alpha = alphas[i]
+        x = xs[i]
+        p0_idx = p0_idxs[i]
+        x_err += ErrorFunc(A, c, alpha, p0, x, p0_idx, spherical)
+    return x_err
+
+def ErrorJacNg(As, cs, alphas, p0, xs, p0_idxs=None, spherical=True):
+    dp = np.zeros(len(p0))
+    for i in range(len(As)):
+        A = As[i]
+        c = cs[i]
+        alpha = alphas[i]
+        x = xs[i]
+        p0_idx = p0_idxs[i]
+        dp += ErrorJac(A, c, alpha, p0, x, p0_idx, spherical)
+    return dp
+
+def EstimateNg(As, cs, alphas, p0, xs, p0_idxs=None,
+               iter=100, tol=0.01, step=0.01*np.pi, spherical=True):
+    S = len(As)
+    p0_idxs = p0_idxs or [None] * S
+    p0_bound = ([1e-6]*len(p0), [np.pi/2-1e-6]*len(p0))
+
+    error_func = lambda p: ErrorFuncNg(As, cs, alphas, p, xs, p0_idxs, spherical)
+    error_jac = lambda p: ErrorJacNg(As, cs, alphas, p, xs, p0_idxs, spherical)
+    res = least_squares(error_func, p0, jac=error_jac, bounds=p0_bound)
+    p_esti = res.x
+    err = res.cost
+
+    # print('Final Result: ', p_esti, err)
+    return p_esti, err
+
+def TrainNg(samples, K=4, theta=None):
+    K2 = K//2
+    K = K2*2
+    RHO = K * K2 * K2 * 3
+    # theta = np.pi/2 * np.random.random(RHO)
+    if (type(theta) == np.ndarray and len(theta)) or not theta:
+        theta = [np.arccos(1/np.sqrt(i)) for i in range(RHO, 1, -1)]
+    As = []
+    cs = []
+    alphas = []
+    xs = []
+    rho_idxs = []
+    for sample in samples:
+        flows = sample['flows']
+        x = sample['rates']
+        A = RoutingMatrix(flows)
+        L, F = A.shape
+        c = [1] * L
+        alpha = [TCP_ALPHA[flows[i]['tcp']] for i in range(F)]
+        rho_idx = RhoIndex(flows, K)
+
+        As.append(A)
+        cs.append(c)
+        alphas.append(alpha)
+        xs.append(x)
+        rho_idxs.append(rho_idx)
+
+    theta, err = EstimateNg(As, cs, alphas, theta, xs, p0_idxs=rho_idxs, step=0.001*np.pi)
+    print(RED('Total relative error = %s' % (err)))
+    rho = Spherical2Cartesian(theta)
+    return rho, theta, err
 
 if __name__ == '__main__':
     # Training phase
@@ -265,7 +348,7 @@ if __name__ == '__main__':
     th = np.pi/2 * np.random.random(len(a)-1)
     x_real = [ 0.54880000000000004, 0.45199999999999996, 0.54800000000000004, 0.42960000000000003 ]
 
-    th_esti, x_esti = Estimate(A, c, a, th, x_real, iter=300)
+    th_esti, err = Estimate(A, c, a, th, x_real)
     w_esti = Spherical2Cartesian(th_esti)
 
     # Prediction phase
@@ -276,8 +359,8 @@ if __name__ == '__main__':
     w_esti[-1] = w_esti[1]
     x_real = [ 0.352, 0.32400000000000002, 0.47599999999999998, 0.62880000000000003, 0.32400000000000002 ]
 
-    # Iter=0 for prediction
-    w_esti, x_esti = Estimate(A, c, a, w_esti, x_real, iter=0, spherical=False)
+    # EstimateX for prediction
+    x_esti = EstimateX(A, c, a, w_esti, x_real, spherical=False)
     abs_err = x_esti - x_real
     rel_err = abs_err / x_real
     print('Absolute error = %s' % (abs_err))
