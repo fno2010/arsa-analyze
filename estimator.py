@@ -6,13 +6,16 @@ from scipy.optimize import fmin_slsqp, least_squares
 from util.const import TCP_ALPHA
 from util.cmd import RED
 
-def Utility(A, c, alpha, rho, x, rho_idx=None):
+def Utility(A, c, alpha, rho, _x, rho_idx=None):
     """
     A: routing matrix
     c: capacity vector
     alpha: vector of base utility factors
     rho: vector of scaling factors
-    x: equilibrium bandwidth
+    _x: extended variables, x//lambda//slack
+        x: equilibrium bandwidth
+        lambda: KKT Multiplier
+        slack: slack variable
     rho_idx: index of scaling factor each flow has
     """
     A = np.array(A)
@@ -22,8 +25,16 @@ def Utility(A, c, alpha, rho, x, rho_idx=None):
     assert A.shape == (K, J)
     assert len(rho_idx) == J
     assert set(range(len(rho))).issuperset(rho_idx)
-    assert len(x) == J
+    assert len(_x) == J + 2 * K
 
+    x = _x[:J]
+    la = _x[J:J+K]
+    s = _x[J+K:]
+
+    # _x = x//lamb//s
+    # L(_x) = f(x) - lamb.T * (g(x) - s^2)
+    # f(x) = sum(-U(x_i))
+    # g(x) = c - A x
     L = 0
     for j in range(J):
         if alpha[j] == 1:
@@ -31,39 +42,64 @@ def Utility(A, c, alpha, rho, x, rho_idx=None):
         else:
             L += rho[rho_idx[j]] * np.power(x[j], 1-alpha[j]) / (1-alpha[j])
 
+    for k in range(K):
+        L -= la[k] * (c[k] - np.dot(A[k], x) - s[k]**2)
+
     return L
 
-def Jac(alpha, rho, x, rho_idx=None):
+def Jac(A, c, alpha, rho, _x, rho_idx=None):
+    A = np.array(A)
     J = len(alpha)
+    K = len(c)
     rho_idx = rho_idx or range(J)
+    assert A.shape == (K, J)
     assert len(rho_idx) == J
     assert set(range(len(rho))).issuperset(rho_idx)
-    assert len(x) == J
+    assert len(_x) == J + 2 * K
 
-    return np.array([rho[rho_idx[j]] * np.power(x[j], -alpha[j]) for j in range(J)])
+    x = _x[:J]
+    la = _x[J:J+K]
+    s = _x[J+K:]
 
-def ConsFunc(A, c, x):
-    A = np.array(A)
-    J = len(x)
-    K = len(c)
-    assert A.shape == (K, J)
-
+    # nabla_x L = nabla_x f - lamb.T * A
+    # nalba_lamb = s^2 - g(x)
+    # nalba_s = 2 * lamb * s
     return np.array([
-        x[j] for j in range(J)
+        rho[rho_idx[j]] * np.power(x[j], -alpha[j]) - np.dot(la, np.array(A)[:,j]) for j in range(J)
     ] + [
-        c[k] - np.dot(A[k], x) for k in range(K)
+        s[k]**2 - c[k] + np.dot(A[k], x) for k in range(K)
+    ] + [
+        2 * la[k] for k in range(K)
     ])
 
-def ConsJoc(A, c, x):
+def PenaltyFunc(A, c, x):
+    A = np.array(A)
+    return [np.dot(A[k], x) - c[k] for k in range(len(c))]
+
+def ConsFunc(A, c, x, s):
     A = np.array(A)
     J = len(x)
     K = len(c)
     assert A.shape == (K, J)
+    assert len(s) == K
+
+    # c - A x - s^2 = 0
+    return np.array([
+        c[k] - np.dot(A[k], x) - s[k]**2 for k in range(K)
+    ])
+
+def ConsJac(A, c, x, s):
+    A = np.array(A)
+    J = len(x)
+    K = len(c)
+    assert A.shape == (K, J)
+    assert len(s) == K
 
     return np.array([
-        [1 if i==j else 0 for i in range(J)] for j in range(J)
-    ] + [
-        -A[k] for k in range(K)
+        (-A[k]).tolist() +
+        [0 for la in range(K)] +
+        [-2*s[i] if i == k else 0 for i in range(K)]
+        for k in range(K)
     ])
 
 def Spherical2Cartesian(theta):
@@ -81,39 +117,53 @@ def Spherical2Cartesian(theta):
 
     return car
 
-def SphericalJoc(theta):
+def SphericalJac(theta):
     N = len(theta)
-    joc = np.zeros((N+1, N))
+    jac = np.zeros((N+1, N))
     sin_t = np.sin(theta)
     cos_t = np.cos(theta)
 
     for i in range(N+1):
         for j in range(N):
             if j < i:
-                joc[i, j] = np.prod([cos_t[t] if t==j else sin_t[t]
+                jac[i, j] = np.prod([cos_t[t] if t==j else sin_t[t]
                                      for t in range(i-1)]) * cos_t[j]
             elif j == i:
-                joc[i, j] = -np.prod(sin_t[:i])
+                jac[i, j] = -np.prod(sin_t[:i])
             else:
-                joc[i, j] = 0
+                jac[i, j] = 0
 
-    return joc
+    return jac
 
 def EstimateX(A, c, alpha, p0, x, p0_idx=None, spherical=True):
+    """
+    x: the initial x0
+    """
     _p0 = p0
     transform = lambda p: Spherical2Cartesian(p) if spherical else p
     p0 = transform(_p0)
 
-    func_util = lambda x: -Utility(A, c, alpha, p0, x, p0_idx)
-    func_jac = lambda x: -Jac(alpha, p0, x, p0_idx)
-    cons_func = lambda x: ConsFunc(A, c, x)
-    cons_joc = lambda x: ConsJoc(A, c, x)
-    x_esti = fmin_slsqp(func_util, x, fprime=func_jac,
-                        f_ieqcons=cons_func, fprime_ieqcons=cons_joc, disp=0)
-    return x_esti
+    J = len(x)
+    K = len(c)
+    # TODO: iterate lambda and slack
+    _x = np.concatenate((x, np.zeros(2*K)))
+    # _x = x//lamb//s
+    # L(_x) = f(x) - lamb.T * (g(x) - s^2)
+    # f(x) = sum(-U(x_i))
+    # g(x) = c - A x
+    func_util = lambda _x: -Utility(A, c, alpha, p0, _x, p0_idx)
+    func_jac = lambda _x: -Jac(A, c, alpha, p0, _x, p0_idx)
+    cons_func = lambda _x: ConsFunc(A, c, _x[:J], _x[J+K:])
+    cons_jac = lambda _x: ConsJac(A, c, _x[:J], _x[J+K:])
+    icons_func = lambda _x: _x
+    icons_jac = lambda _x: np.eye(len(_x))
+    _x_esti = fmin_slsqp(func_util, _x, fprime=func_jac,
+                         f_eqcons=cons_func, fprime_eqcons=cons_jac,
+                         f_ieqcons=icons_func, fprime_ieqcons=icons_jac, disp=0)
+    return _x_esti[:J], _x_esti[J:J+K]
 
 def ErrorFunc(A, c, alpha, p0, x, p0_idx=None, spherical=True):
-    x_esti = EstimateX(A, c, alpha, p0, x, p0_idx, spherical)
+    x_esti, la_esti = EstimateX(A, c, alpha, p0, x, p0_idx, spherical)
     # abs_err = x_esti - x
     # rel_err = abs_err / x
     # print(RED('absolute err=%s' % (abs_err)))
@@ -130,28 +180,31 @@ def ErrorJac(A, c, alpha, p0, x, p0_idx=None, spherical=True):
     K = len(c)
     J = len(alpha)
     p0_idx = p0_idx or range(J)
-    x_esti = EstimateX(A, c, alpha, p0, x, p0_idx, spherical=False)
+    x_esti, la_esti = EstimateX(A, c, alpha, p0, x, p0_idx, spherical=False)
+
+    # FIXME: update error jacobian matrix
     La = np.diag([p0[p0_idx[j]]*alpha[j]*np.power(x_esti[j], -alpha[j]-1)
                   for j in range(J)])
     D = np.bmat([[La, A.T],
-                 [A, np.zeros((K, K))]])
+                 [np.diag(la_esti)*A, np.diag(PenaltyFunc(A, c, x_esti))]])
     CX = np.zeros((J, P))
     for j, i in np.ndindex(CX.shape):
         if p0_idx[j] == i:
             CX[j, i] = np.power(x_esti[j], -alpha[j])
 
     C = np.bmat([[CX],
-                 [np.mat(c).T * np.ones((1, P))]])
+                 [np.zeros((K, P))]])
     if np.linalg.det(D) == 0:
-        print(RED('Error(-1): matrix D is not invertible. It is possible that matrix A has full 0 row or column.'))
-        return np.zeros(len(_p0))
-    DW = D.I * C
+        # print(RED('Warn(-1): matrix D is not invertible. It is possible that matrix A has a full 0 row or column.'))
+        DW, _, _, _ = np.linalg.lstsq(D, C, rcond=None)
+    else:
+        DW = D.I * C
     DWX = DW[:J]
 
     # Update p0
     dp = (x_esti/x - 1) / x * DWX
     if spherical:
-        dp = dp * SphericalJoc(_p0)
+        dp = dp * SphericalJac(_p0)
     return 2 * np.array(dp)[0]
 
 def Estimate(A, c, alpha, p0, x, p0_idx=None,
@@ -267,7 +320,7 @@ def Predict(flows, rho, K=4):
     rho_idx = RhoIndex(flows, K)
     x0 = np.array([1.]*F) / F
 
-    x = EstimateX(A, c, alpha, rho, x0, p0_idx=rho_idx, spherical=False)
+    x, la = EstimateX(A, c, alpha, rho, x0, p0_idx=rho_idx, spherical=False)
     return x
 
 def ErrorFuncNg(As, cs, alphas, p0, xs, p0_idxs=None, spherical=True):
@@ -360,7 +413,7 @@ if __name__ == '__main__':
     x_real = [ 0.352, 0.32400000000000002, 0.47599999999999998, 0.62880000000000003, 0.32400000000000002 ]
 
     # EstimateX for prediction
-    x_esti = EstimateX(A, c, a, w_esti, x_real, spherical=False)
+    x_esti, la_esti = EstimateX(A, c, a, w_esti, x_real, spherical=False)
     abs_err = x_esti - x_real
     rel_err = abs_err / x_real
     print('Absolute error = %s' % (abs_err))
