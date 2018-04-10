@@ -14,7 +14,7 @@ def Utility(A, c, alpha, rho, _x, rho_idx=None):
     rho: vector of scaling factors
     _x: extended variables, x//lambda//slack
         x: equilibrium bandwidth
-        lambda: KKT Multiplier
+        lambda: dual variable
         slack: slack variable
     rho_idx: index of scaling factor each flow has
     """
@@ -41,7 +41,7 @@ def Utility(A, c, alpha, rho, _x, rho_idx=None):
             # L += rho[rho_idx[j]] * np.log(x[j])
             L += rho[rho_idx[j]] * (np.log(x[j]) if x[j] > 1e-323 else -1e4)
         else:
-            L += rho[rho_idx[j]] * np.power(x[j], 1-alpha[j]) / (1-alpha[j])
+            L += rho[rho_idx[j]] * np.power(x[j], 1-alpha[j]) / (alpha[j]-1)
 
     for k in range(K):
         L -= la[k] * (c[k] - np.dot(A[k], x) - s[k]**2)
