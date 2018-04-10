@@ -41,7 +41,7 @@ def Utility(A, c, alpha, rho, _x, rho_idx=None):
             # L += rho[rho_idx[j]] * np.log(x[j])
             L += rho[rho_idx[j]] * (np.log(x[j]) if x[j] > 1e-323 else -1e4)
         else:
-            L += rho[rho_idx[j]] * np.power(x[j], 1-alpha[j]) / (alpha[j]-1)
+            L += rho[rho_idx[j]] * np.power(x[j], 1-alpha[j]) / (1-alpha[j])
 
     for k in range(K):
         L -= la[k] * (c[k] - np.dot(A[k], x) - s[k]**2)
@@ -66,7 +66,7 @@ def Jac(A, c, alpha, rho, _x, rho_idx=None):
     # nalba_lamb = s^2 - g(x)
     # nalba_s = 2 * lamb * s
     return np.array([
-        rho[rho_idx[j]] * np.power(x[j], -alpha[j]) - np.dot(la, np.array(A)[:,j]) for j in range(J)
+        rho[rho_idx[j]] * (np.power(x[j], -alpha[j]) if x[j] > 1e-308 else 1e308) - np.dot(la, np.array(A)[:,j]) for j in range(J)
     ] + [
         s[k]**2 - c[k] + np.dot(A[k], x) for k in range(K)
     ] + [
