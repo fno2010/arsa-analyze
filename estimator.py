@@ -330,25 +330,25 @@ def Predict(flows, rho, K=4):
     return x
 
 def ErrorFuncNg(As, cs, alphas, p0, xs, p0_idxs=None, spherical=True):
-    x_err = 0
+    x_err = np.array([])
     for i in range(len(As)):
         A = As[i]
         c = cs[i]
         alpha = alphas[i]
         x = xs[i]
         p0_idx = p0_idxs[i]
-        x_err += ErrorFunc(A, c, alpha, p0, x, p0_idx, spherical)
+        x_err = np.append(x_err, ErrorFunc(A, c, alpha, p0, x, p0_idx, spherical))
     return x_err
 
 def ErrorJacNg(As, cs, alphas, p0, xs, p0_idxs=None, spherical=True):
-    dp = np.zeros(len(p0))
+    dp = np.zeros((0, len(p0)))
     for i in range(len(As)):
         A = As[i]
         c = cs[i]
         alpha = alphas[i]
         x = xs[i]
         p0_idx = p0_idxs[i]
-        dp += ErrorJac(A, c, alpha, p0, x, p0_idx, spherical)
+        dp = np.append(dp, ErrorJac(A, c, alpha, p0, x, p0_idx, spherical), axis=0)
     return dp
 
 def EstimateNg(As, cs, alphas, p0, xs, p0_idxs=None,
