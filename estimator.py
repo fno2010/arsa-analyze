@@ -38,7 +38,8 @@ def Utility(A, c, alpha, rho, _x, rho_idx=None):
     L = 0
     for j in range(J):
         if alpha[j] == 1:
-            L += rho[rho_idx[j]] * np.log(x[j])
+            # L += rho[rho_idx[j]] * np.log(x[j])
+            L += rho[rho_idx[j]] * (np.log(x[j]) if x[j] > 1e-323 else -1e4)
         else:
             L += rho[rho_idx[j]] * np.power(x[j], 1-alpha[j]) / (1-alpha[j])
 
@@ -158,8 +159,10 @@ def EstimateX(A, c, alpha, p0, x, p0_idx=None, spherical=True):
     icons_func = lambda _x: _x
     icons_jac = lambda _x: np.eye(len(_x))
     _x_esti = fmin_slsqp(func_util, _x, fprime=func_jac,
+                         bounds=[(0, np.inf) for xi in _x],
                          f_eqcons=cons_func, fprime_eqcons=cons_jac,
-                         f_ieqcons=icons_func, fprime_ieqcons=icons_jac, disp=0)
+                         # f_ieqcons=icons_func, fprime_ieqcons=icons_jac,
+                         disp=0)
     return _x_esti[:J], _x_esti[J:J+K]
 
 def ErrorFunc(A, c, alpha, p0, x, p0_idx=None, spherical=True):
@@ -168,7 +171,8 @@ def ErrorFunc(A, c, alpha, p0, x, p0_idx=None, spherical=True):
     # rel_err = abs_err / x
     # print(RED('absolute err=%s' % (abs_err)))
     # print(RED('relative err=%s' % (rel_err)))
-    x_err = np.linalg.norm((x_esti - x)/x)**2
+    # x_err = np.linalg.norm((x_esti - x)/x)**2
+    x_err = x_esti - x
     return x_err
 
 def ErrorJac(A, c, alpha, p0, x, p0_idx=None, spherical=True):
@@ -202,10 +206,12 @@ def ErrorJac(A, c, alpha, p0, x, p0_idx=None, spherical=True):
     DWX = DW[:J]
 
     # Update p0
-    dp = (x_esti/x - 1) / x * DWX
+    # dp = (x_esti/x - 1) / x * DWX
+    dp = DWX
     if spherical:
         dp = dp * SphericalJac(_p0)
-    return 2 * np.array(dp)[0]
+    # return 2 * np.array(dp)[0]
+    return np.array(dp)
 
 def Estimate(A, c, alpha, p0, x, p0_idx=None,
              iter=100, tol=0.01, step=0.01*np.pi, spherical=True):
@@ -416,5 +422,8 @@ if __name__ == '__main__':
     x_esti, la_esti = EstimateX(A, c, a, w_esti, x_real, spherical=False)
     abs_err = x_esti - x_real
     rel_err = abs_err / x_real
+    print('Real throughput = %s' % (x_real))
+    print('Estimated throughput = %s' % (x_esti))
+    print('Lagrangian multiplier = %s' % (la_esti))
     print('Absolute error = %s' % (abs_err))
     print('Related error = %s' % (rel_err))
