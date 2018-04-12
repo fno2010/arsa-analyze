@@ -65,18 +65,46 @@ class ADMM(object):
         delta = [c[i] - np.dot(B[i], zk) - np.dot(A[i], xk) for i in range(M)]
         uk = u - rho * np.array(delta)
 
+        e = max(((self.x - xk)/xk)**2)
         self.x, self.z, self.u = xk, zk, uk
+        return e
 
     def solve(self, niter, step=1):
         for i in range(niter):
-            self.iterate()
+            e = self.iterate()
+            print(sum(self.f(self.x)))
             if i % step == 0:
                 print("x=", self.x)
-                print("z=", self.z)
-                print("u=", self.u)
+                # print("z=", self.z)
+                # print("u=", self.u)
+                print(e)
+            if e < 1e-4:
+                break
         return self.x, self.z, self.u
 
 def argmin_f(f, rho, A, AT, u, c):
+    M, N = A.shape
+
+    sq = lambda _x: np.array([safedot(A[i], _x) - c[i] for i in range(M)])
+    pr = lambda _sqx: np.dot(u, _sqx) + rho / 2 * sum(_sqx**2)
+    fs = lambda _x: sum(f(_x))
+    obj = lambda _x: -fs(_x) + pr(sq(_x))
+
+    uTA = [np.dot(AT[i], u) for i in range(N)]
+    pprime = lambda _x: np.array(uTA)
+    ppprime = lambda _sqx: np.array([np.dot(AT[j], _sqx) for j in range(N)])
+    fprime = lambda _x: -1/np.maximum(_x, 1e-4) + 1e2 * np.sign(np.minimum(_x - 1e-4, 0))
+    jac = lambda _x: fprime(_x) + pprime(_x) + rho * ppprime(sq(_x))
+
+    x = np.ones(N)
+
+    b = np.asarray(A)[0]
+    xs = fmin_ncg(obj, x, fprime=jac,
+                  disp=0)
+                    #bounds=[(0, np.inf) for i in range(N)], disp=0)
+    return xs
+
+def argmin_f2(f, rho, A, AT, u, c):
     M, N = A.shape
 
     sq = lambda _x: np.array([safedot(A[i], _x) - c[i] for i in range(M)])
@@ -93,7 +121,8 @@ def argmin_f(f, rho, A, AT, u, c):
     x = np.ones(N)
 
     b = np.asarray(A)[0]
-    xs = fmin_ncg(obj, x, fprime=jac, disp=0)
+    xs = fmin_slsqp(obj, x, fprime=jac,
+                    bounds=[(0, np.inf) for i in range(N)], iter=10, disp=0)
     return xs
 
 def argmin_g(rho, B, BT, u, c):
@@ -111,14 +140,30 @@ def argmin_g(rho, B, BT, u, c):
     x = np.zeros(M)
 
     xs = fmin_slsqp(obj, x, fprime=jac,
-                    bounds=[(0, np.inf) for i in range(M)], disp=0)
+                    bounds=[(1e-4, np.inf) for i in range(M)], iter=10, disp=0)
     return xs
 
 if __name__ == '__main__':
-    A = np.array([[1, 0, 0], [1, 1, 0], [1, 0, 1]])
-    c = np.array([1, 1, 1])
+    import sys, random
+    H, F = sys.argv[1:]
+    H, F = int(H), int(F)
+
+    hosts = list(range(H))
+    pairs = [random.sample(hosts, 2) for i in range(F)]
+
+    A = [[] for i in range(H)]
+    for i in range(H):
+        A[i] = [1 if pairs[j][0] == i or pairs[j][1] == i else 0 for j in range(F)]
+
+    #A = [[1, 0, 0], [1, 1, 0], [1, 0, 1]]
+    #H = 3
+    A = np.array(A)
+    c = np.array([1 for i in range(H)])
 
     print(c)
 
-    admm = ADMM(lambda x: np.log(x), argmin_f, argmin_g, A, c)
+    f1 = lambda x: np.log(np.maximum(x, 1e-4)) + 1e2 * np.minimum(x - 1e-4, 0)
+    f2 = lambda x: np.log(x+1e-4)
+
+    admm = ADMM(f2, argmin_f2, argmin_g, A, c)
     admm.solve(10)
