@@ -16,6 +16,9 @@ def solve(A, c, alpha, rho, niter, debug=False):
     B = matrix(A, tc='d')
     c = matrix(c, tc='d')
 
+    alpha = np.array(alpha)
+    rho = np.array(rho)
+
     m, n = B.size
 
     assert n == len(alpha)
@@ -51,4 +54,5 @@ def solve(A, c, alpha, rho, niter, debug=False):
         return fx, fpx, fppx
 
     ret = solvers.cp(F, G=B, h=c, maxiters=niter, options={'show_progress': debug})
-    return ret['x'], ret['zl']
+    x, u = ret['x'], ret['zl']
+    return np.array(x).flatten(), np.array(u).flatten()
