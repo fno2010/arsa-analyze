@@ -29,14 +29,14 @@ class ADMM(object):
         self.f = f
 
         self.argmin_f = argmin_f
-        self.A = A
-        self.AT = A.T
+        self.A = np.array(A)
+        self.AT = self.A.T
 
         self.argmin_g = argmin_g
         self.B = np.eye(self.M)
         self.BT = np.eye(self.M)
 
-        self.c = c
+        self.c = np.array(c)
 
         self.x = np.zeros(self.N)
         self.z = np.zeros(self.M)
@@ -69,18 +69,109 @@ class ADMM(object):
         self.x, self.z, self.u = xk, zk, uk
         return e
 
-    def solve(self, niter, step=1):
+    def dump(self):
+        print(sum(self.f(self.x)))
+        print("x=", self.x)
+        print("z=", self.z)
+        print("u=", self.u)
+
+    def solve(self, niter, step=1, debug=False):
         for i in range(niter):
             e = self.iterate()
-            print(sum(self.f(self.x)))
-            if i % step == 0:
-                print("x=", self.x)
-                # print("z=", self.z)
-                # print("u=", self.u)
-                print(e)
+            if debug:
+                if (i+1) % step == 0:
+                    self.dump()
+                    print(e)
             if e < 1e-4:
                 break
+        if debug:
+            self.dump()
         return self.x, self.z, self.u
+
+class FullADMM(ADMM):
+
+    def __init__(self, f, A, c, rho=1):
+        ADMM.__init__(self, f, None, None, A, c, rho)
+
+    def update_x(self, f, rho, A, AT, u, c):
+        N = self.N
+        xs = np.array(self.x)
+        uTA = [np.dot(AT[i], u) for i in range(N)]
+
+        for i in range(N):
+            xi = xs[i]
+
+            aa = np.dot(AT[i], AT[i])
+            _a = rho * aa
+            _b = uTA[i] - rho * (np.dot(AT[i], c) + aa * xi)
+            _c = -1
+            dx = lambda _x: _a * _x + _b + _c / _x
+
+            xs[i] = max(0, (-_b + np.sqrt(_b**2 - 4 * _a * _c))/(2*_a))
+
+            sq = lambda _x: np.array(AT[i] * (_x - xi) - c)
+            pr = lambda _sqx: np.dot(u, _sqx) + rho / 2 * sum(_sqx**2)
+            obj = lambda _x: -f(_x) + pr(sq(_x))
+
+            fprime = lambda _x: -1/np.maximum(_x, 1e-4)
+            pprime = lambda _x: uTA[i]
+            ppprime = lambda _sqx: np.array(np.dot(AT[i], _sqx))
+            jac = lambda _x: fprime(_x) + pprime(_x) + rho * ppprime(sq(_x))
+
+
+            xsi = fmin_slsqp(obj, np.ones(1), fprime=jac,
+                             bounds=[(1e-3, np.inf)], disp=0)
+            if xs[i] - xsi > 1e-2:
+                print("error:", xs[i], xsi)
+            c += AT[i] * (xi - xs[i])
+
+        return xs
+
+    def update_z(self, rho, B, BT, u, c):
+        M = len(B)
+        xs = np.array(self.z)
+
+        uTB = u
+
+        for i in range(M):
+            xi = xs[i]
+            sq = lambda _x: (_x - xi) - c[i]
+            pr = lambda _x: u[i] * _x + rho / 2 * sum(_x**2)
+            obj = lambda _x: pr(sq(_x))
+
+            pprime = lambda _x: uTB[i]
+            ppprime = lambda _sqx: _sqx
+            jac = lambda _x: pprime(_x) + rho * ppprime(sq(_x))
+
+            xs[i] = fmin_slsqp(obj, np.zeros(1), fprime=jac,
+                               bounds=[(1e-4, np.inf)], iter=10, disp=0)
+            c += (xi - xs[i])
+        return xs
+
+    def iterate(self):
+        x, z, u = self.x, self.z, self.u
+        A, B = self.A, self.B
+        AT, BT = self.AT, self.BT
+        c = self.c
+        rho = self.rho
+        N, M = self.N, self.M
+        f = self.f
+
+        b = np.array([c[i] - safedot(B[i], z) - safedot(A[i], x) for i in range(M)])
+        # iterate x
+        for i in range(10):
+            xk = self.update_x(f, rho, A, AT, u, b)
+            self.x = xk
+
+        # iterate z
+        zk = self.update_z(rho, B, BT, u, b)
+
+        # iterate u
+        uk = u - rho * b
+
+        e = max(((self.x - xk)/xk)**2)
+        self.x, self.z, self.u = xk, zk, uk
+        return e
 
 def argmin_f(f, rho, A, AT, u, c):
     M, N = A.shape
@@ -157,13 +248,37 @@ if __name__ == '__main__':
 
     #A = [[1, 0, 0], [1, 1, 0], [1, 0, 1]]
     #H = 3
+    #F = 3
     A = np.array(A)
     c = np.array([1 for i in range(H)])
-
-    print(c)
 
     f1 = lambda x: np.log(np.maximum(x, 1e-4)) + 1e2 * np.minimum(x - 1e-4, 0)
     f2 = lambda x: np.log(x+1e-4)
 
-    admm = ADMM(f2, argmin_f2, argmin_g, A, c)
-    admm.solve(10)
+    from cvxopt import matrix
+    from cvxsolver import acent
+    B = matrix(A, tc='d')
+    b = matrix(c.flatten(), (H, 1), 'd')
+    x1 = acent(B, b, 10)
+    x2 = acent(B, b, 100)
+
+    from numsolver import solve
+    x, u = solve(A, c, np.ones(F), np.ones(F), 10)
+
+    print(sum(f1(x1)), np.max(A * np.array(x1) - c))
+    print(sum(f1(x2)), np.max(A * x2 - c))
+    print(sum(f1(x)), np.max(A * x - c))
+
+    admm = ADMM(f1, argmin_f, argmin_g, A, c)
+    x, _, _ = admm.solve(5, 5, debug=False)
+    print(sum(f1(x)), np.max(A * x - c))
+    x, _, _ = admm.solve(200, 200, debug=False)
+    print(sum(f1(x)), np.max(A * x - c))
+
+    #admm2 = FullADMM(f2, A, c)
+    #x1, z1, u1 = admm2.solve(10, 10)
+
+    #admm3 = FullADMM(f2, A, c)
+    #x2, z2, u2 = admm3.solve(50, 50)
+
+    #print("diff:", max(((x1 - x2)/x1)**2))
