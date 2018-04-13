@@ -4,6 +4,15 @@ from cvxopt import solvers, matrix, spdiag, log
 import numpy as np
 
 def solve(A, c, alpha, rho, niter, debug=False):
+    """
+    This function solves the NUM problem.
+
+        max sum(U(x))
+           Ax <= c
+
+    The srikant's utility function:
+        U(x) = rho * x^(1-alpha) / (1 - alpha)
+    """
     B = matrix(A, tc='d')
     c = matrix(c, tc='d')
 
@@ -26,7 +35,6 @@ def solve(A, c, alpha, rho, niter, debug=False):
         return rho * np.power(y, -alpha)
 
     def fpprime(x, z):
-        print("x.size=", x.size)
         y = np.array(x.T).flatten()
         return z[0] * rho * -alpha * y**(-alpha-1)
 
@@ -36,9 +44,7 @@ def solve(A, c, alpha, rho, niter, debug=False):
         if min(x) <= 0.0:
             return None
         fx = matrix(-f(x), (1,1))
-        print(fx.size)
         fpx = matrix(-fprime(x), (1, n))
-        print(fpx.size)
         if z is None:
             return fx, fpx
         fppx = spdiag(matrix(-fpprime(x,z), (n, 1)))
