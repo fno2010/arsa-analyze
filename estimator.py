@@ -6,6 +6,8 @@ from scipy.optimize import fmin_slsqp, least_squares
 from util.const import TCP_ALPHA
 from util.cmd import RED
 
+import numsolver
+
 def Utility(A, c, alpha, rho, _x, rho_idx=None):
     """
     A: routing matrix
@@ -25,11 +27,12 @@ def Utility(A, c, alpha, rho, _x, rho_idx=None):
     assert A.shape == (K, J)
     assert len(rho_idx) == J
     assert set(range(len(rho))).issuperset(rho_idx)
-    assert len(_x) == J + 2 * K
+    # assert len(_x) == J + 2 * K
 
-    x = _x[:J]
-    la = _x[J:J+K]
-    s = _x[J+K:]
+    # x = _x[:J]
+    x = _x
+    # la = _x[J:J+K]
+    # s = _x[J+K:]
 
     # _x = x//lamb//s
     # L(_x) = f(x) - lamb.T * (g(x) - s^2)
@@ -43,8 +46,8 @@ def Utility(A, c, alpha, rho, _x, rho_idx=None):
         else:
             L += rho[rho_idx[j]] * np.power(x[j], 1-alpha[j]) / (1-alpha[j])
 
-    for k in range(K):
-        L -= la[k] * (c[k] - np.dot(A[k], x) - s[k]**2)
+    # for k in range(K):
+    #     L -= la[k] * (c[k] - np.dot(A[k], x) - s[k]**2)
 
     return L
 
@@ -56,21 +59,23 @@ def Jac(A, c, alpha, rho, _x, rho_idx=None):
     assert A.shape == (K, J)
     assert len(rho_idx) == J
     assert set(range(len(rho))).issuperset(rho_idx)
-    assert len(_x) == J + 2 * K
+    # assert len(_x) == J + 2 * K
 
-    x = _x[:J]
-    la = _x[J:J+K]
-    s = _x[J+K:]
+    # x = _x[:J]
+    x = _x
+    # la = _x[J:J+K]
+    # s = _x[J+K:]
 
     # nabla_x L = nabla_x f - lamb.T * A
     # nalba_lamb = s^2 - g(x)
     # nalba_s = 2 * lamb * s
     return np.array([
-        rho[rho_idx[j]] * (np.power(x[j], -alpha[j]) if x[j] > 1e-308 else 1e308) - np.dot(la, np.array(A)[:,j]) for j in range(J)
-    ] + [
-        s[k]**2 - c[k] + np.dot(A[k], x) for k in range(K)
-    ] + [
-        2 * la[k] for k in range(K)
+        # rho[rho_idx[j]] * (np.power(x[j], -alpha[j]) if x[j] > 1e-308 else 1e308) - np.dot(la, np.array(A)[:,j]) for j in range(J)
+        rho[rho_idx[j]] * (np.power(x[j], -alpha[j]) if x[j] > 1e-308 else 1e308) for j in range(J)
+    # ] + [
+    #     s[k]**2 - c[k] + np.dot(A[k], x) for k in range(K)
+    # ] + [
+    #     2 * la[k] for k in range(K)
     ])
 
 def PenaltyFunc(A, c, x):
@@ -101,6 +106,27 @@ def ConsJac(A, c, x, s):
         [0 for la in range(K)] +
         [-2*s[i] if i == k else 0 for i in range(K)]
         for k in range(K)
+    ])
+
+def IConsFunc(A, c, x):
+    A = np.array(A)
+    J = len(x)
+    K = len(c)
+    assert A.shape == (K, J)
+
+    # c - A x - s^2 = 0
+    return np.array([
+        c[k] - np.dot(A[k], x) for k in range(K)
+    ])
+
+def IConsJac(A, c, x):
+    A = np.array(A)
+    J = len(x)
+    K = len(c)
+    assert A.shape == (K, J)
+
+    return np.array([
+        (-A[k]).tolist() for k in range(K)
     ])
 
 def Spherical2Cartesian(theta):
@@ -136,7 +162,14 @@ def SphericalJac(theta):
 
     return jac
 
-def EstimateX(A, c, alpha, p0, x, p0_idx=None, spherical=True):
+def ApproximateLa(A, c, x, grad, g):
+    K = len(c)
+    A_la = np.bmat([[A.T], [np.diag(g(x) > 1e-8)]])
+    C_la = np.bmat([[np.mat(grad(x)).T], [np.zeros((K, 1))]])
+    la, _, _, _ = np.linalg.lstsq(A_la, C_la, rcond=None)
+    return np.array(la).flatten()
+
+def EstimateX_Orig(A, c, alpha, p0, x, p0_idx=None, spherical=True, disp=0):
     """
     x: the initial x0
     """
@@ -147,23 +180,39 @@ def EstimateX(A, c, alpha, p0, x, p0_idx=None, spherical=True):
     J = len(x)
     K = len(c)
     # TODO: iterate lambda and slack
-    _x = np.concatenate((x, np.zeros(2*K)))
+    # _x = np.concatenate((x, np.zeros(2*K)))
+    _x = x
     # _x = x//lamb//s
     # L(_x) = f(x) - lamb.T * (g(x) - s^2)
     # f(x) = sum(-U(x_i))
     # g(x) = c - A x
     func_util = lambda _x: -Utility(A, c, alpha, p0, _x, p0_idx)
     func_jac = lambda _x: -Jac(A, c, alpha, p0, _x, p0_idx)
-    cons_func = lambda _x: ConsFunc(A, c, _x[:J], _x[J+K:])
-    cons_jac = lambda _x: ConsJac(A, c, _x[:J], _x[J+K:])
-    icons_func = lambda _x: _x
-    icons_jac = lambda _x: np.eye(len(_x))
+    # cons_func = lambda _x: ConsFunc(A, c, _x[:J], _x[J+K:])
+    # cons_jac = lambda _x: ConsJac(A, c, _x[:J], _x[J+K:])
+    icons_func = lambda _x: IConsFunc(A, c, _x)
+    icons_jac = lambda _x: IConsJac(A, c, _x)
     _x_esti = fmin_slsqp(func_util, _x, fprime=func_jac,
                          bounds=[(0, np.inf) for xi in _x],
-                         f_eqcons=cons_func, fprime_eqcons=cons_jac,
-                         # f_ieqcons=icons_func, fprime_ieqcons=icons_jac,
-                         disp=0)
-    return _x_esti[:J], _x_esti[J:J+K]
+                         # f_eqcons=cons_func, fprime_eqcons=cons_jac,
+                         f_ieqcons=icons_func, fprime_ieqcons=icons_jac,
+                         disp=disp)
+    # return _x_esti[:J], _x_esti[J:J+K]
+    return _x_esti, ApproximateLa(A, c, _x_esti, func_jac, icons_func)
+
+def EstimateX(A, c, alpha, p0, x, p0_idx=None, spherical=True, disp=0):
+    _p0 = p0
+    transform = lambda p: Spherical2Cartesian(p) if spherical else p
+    p0 = transform(_p0)
+
+    J = len(x)
+    p0_idx = p0_idx or range(J)
+
+    p0_full = np.array([p0[i] for i in p0_idx])
+    c = np.array(c)
+    alpha = np.array(alpha)
+    x_esti, la_esti = numsolver.solve(A, c, alpha, p0_full, niter=100, debug=disp)
+    return np.array(x_esti).flatten(), np.array(la_esti).flatten()
 
 def ErrorFunc(A, c, alpha, p0, x, p0_idx=None, spherical=True):
     x_esti, la_esti = EstimateX(A, c, alpha, p0, x, p0_idx, spherical)
@@ -326,7 +375,7 @@ def Predict(flows, rho, K=4):
     rho_idx = RhoIndex(flows, K)
     x0 = np.array([1.]*F) / F
 
-    x, la = EstimateX(A, c, alpha, rho, x0, p0_idx=rho_idx, spherical=False)
+    x, la = EstimateX(A, c, alpha, rho, x0, p0_idx=rho_idx, spherical=False, disp=2)
     return x
 
 def ErrorFuncNg(As, cs, alphas, p0, xs, p0_idxs=None, spherical=True):
@@ -419,7 +468,7 @@ if __name__ == '__main__':
     x_real = [ 0.352, 0.32400000000000002, 0.47599999999999998, 0.62880000000000003, 0.32400000000000002 ]
 
     # EstimateX for prediction
-    x_esti, la_esti = EstimateX(A, c, a, w_esti, x_real, spherical=False)
+    x_esti, la_esti = EstimateX(A, c, a, w_esti, x_real, spherical=False, disp=2)
     abs_err = x_esti - x_real
     rel_err = abs_err / x_real
     print('Real throughput = %s' % (x_real))
