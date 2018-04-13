@@ -50,5 +50,5 @@ def solve(A, c, alpha, rho, niter, debug=False):
         fppx = spdiag(matrix(-fpprime(x,z), (n, 1)))
         return fx, fpx, fppx
 
-    ret = solvers.cp(F, G=B, h=c, maxiters=niter, show_progress=False)
+    ret = solvers.cp(F, G=B, h=c, maxiters=niter, options={'show_progress': debug})
     return ret['x'], ret['zl']
