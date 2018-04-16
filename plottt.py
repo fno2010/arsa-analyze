@@ -9,14 +9,24 @@ if __name__ == '__main__':
     N = 10
     T = {}
     with open('test-time.log', 'r') as f:
-        t = sorted(list(map(float, f.readlines())))
+        t0 = list(map(float, f.readlines()))
+        t = sorted(t0)
 
-    fig, ax = plot.subplots()
     x = range(len(t))
     c = np.cumsum([1.0 / len(t)] * len(t))
+
+    fig, ax = plot.subplots()
+    ax.plot(list(range(len(t0))), t0)
+
+    plot.xlabel('Samples', fontsize=14)
+    plot.ylabel('Prediction Time (s)')
+
+    fig.savefig('pred-time.pdf')
+
+    fig, ax = plot.subplots()
     ax.plot(t, c)
 
     plot.xlabel('Prediction Time (s)', fontsize=14)
     plot.ylabel('CDF')
 
-    fig.savefig('test-time.pdf')
+    fig.savefig('pred-time-cdf.pdf')

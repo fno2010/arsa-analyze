@@ -2,8 +2,9 @@
 
 from cvxopt import solvers, matrix, spdiag, log
 import numpy as np
+from scipy.optimize import fmin_slsqp, least_squares
 
-def solve(A, c, alpha, rho, niter, debug=False):
+def solve_num(A, c, alpha, rho, niter=100, debug=False):
     """
     This function solves the NUM problem.
 
@@ -56,3 +57,33 @@ def solve(A, c, alpha, rho, niter, debug=False):
     ret = solvers.cp(F, G=B, h=c, maxiters=niter, options={'show_progress': debug})
     x, u = ret['x'], ret['zl']
     return np.array(x).flatten(), np.array(u).flatten()
+
+def solve(A, c, alpha, rho, niter=100, debug=False):
+    """
+    For backward compatibility
+    """
+    return solve_num(A, c, alpha, rho, niter, debug)
+
+def train(samples, A, c, alpha):
+    m, n = A.shape
+
+    def f(rho0):
+        rho = np.concatenate((rho0, np.ones(1)))
+        x, u = solve_num(A, c, alpha, rho)
+        return sum([np.power(x - sample, 2) for sample in samples])
+
+    rho = fmin_slsqp(f, np.zeros(m-1),
+                     bounds=[(0, np.inf) for i in range(m-1)],
+                     disp=0)
+    return rho
+
+if __name__ == '__main__':
+    A = np.array([[1, 0, 0], [1, 1, 0], [1, 0, 1]])
+    c = np.array([1, 1, 1])
+    alpha = np.ones(3)
+
+    samples = [np.array([0.33, 0.67, 0.67])]
+
+    rho = train(samples, A, c, alpha)
+
+    print(rho)

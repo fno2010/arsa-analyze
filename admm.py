@@ -235,6 +235,8 @@ def argmin_g(rho, B, BT, u, c):
     return xs
 
 if __name__ == '__main__':
+    import time, datetime
+    start = datetime.datetime.now()
     import sys, random
     H, F = sys.argv[1:]
     H, F = int(H), int(F)
@@ -246,7 +248,7 @@ if __name__ == '__main__':
     for i in range(H):
         A[i] = [1 if pairs[j][0] == i or pairs[j][1] == i else 0 for j in range(F)]
 
-    #A = [[1, 0, 0], [1, 1, 0], [1, 0, 1]]
+    #A = [[0, 1, 1], [1, 1, 0], [1, 0, 1]]
     #H = 3
     #F = 3
     A = np.array(A)
@@ -259,21 +261,30 @@ if __name__ == '__main__':
     from cvxsolver import acent
     B = matrix(A, tc='d')
     b = matrix(c.flatten(), (H, 1), 'd')
-    x1 = acent(B, b, 10)
-    x2 = acent(B, b, 100)
+    #x1 = acent(B, b, 10)
+    #x2 = acent(B, b, 100)
+
+    #end = datetime.datetime.now()
+    #print(end - start, file=sys.stderr)
 
     from numsolver import solve
+
+    #start = datetime.datetime.now()
     x, u = solve(A, c, np.ones(F), np.ones(F), 10)
+    end = datetime.datetime.now()
 
-    print(sum(f1(x1)), np.max(A * np.array(x1) - c))
-    print(sum(f1(x2)), np.max(A * x2 - c))
-    print(sum(f1(x)), np.max(A * x - c))
+    print(end - start)
 
-    admm = ADMM(f1, argmin_f, argmin_g, A, c)
-    x, _, _ = admm.solve(5, 5, debug=False)
-    print(sum(f1(x)), np.max(A * x - c))
-    x, _, _ = admm.solve(200, 200, debug=False)
-    print(sum(f1(x)), np.max(A * x - c))
+    #print(sum(f1(x1)), np.max(A * np.array(x1) - c))
+    #print(sum(f1(x2)), np.max(A * x2 - c))
+    #print(x, u)
+    #print(sum(f1(x)), np.max(np.dot(A, x) - c))
+
+    #admm = ADMM(f1, argmin_f, argmin_g, A, c)
+    #x, _, _ = admm.solve(5, 5, debug=False)
+    #print(sum(f1(x)), np.max(A * x - c))
+    #x, _, _ = admm.solve(200, 200, debug=False)
+    #print(sum(f1(x)), np.max(A * x - c))
 
     #admm2 = FullADMM(f2, A, c)
     #x1, z1, u1 = admm2.solve(10, 10)
