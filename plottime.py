@@ -5,10 +5,10 @@ import math
 from statistics import mean, stdev
 
 if __name__ == '__main__':
-    N = 10
+    N = 4
     T = {}
     for i in range(N):
-        with open('5x10/time-%d.log' % i, 'r') as f:
+        with open('output.onlytrain5x10/time-%d.log' % i, 'r') as f:
             t = list(map(float, f.readlines()))
             print(t)
 

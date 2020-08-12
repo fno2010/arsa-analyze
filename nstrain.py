@@ -27,7 +27,7 @@ if __name__ == '__main__':
     trains.sort()
     rho, theta = None, None
 
-    train_out = open('output/train.log', 'w')
+    train_out = open('output.train/train.log', 'w')
     train_rho = []
     print(YELLOW('='*30 + ' Train ' + '='*30))
     for name in trains:
@@ -45,7 +45,7 @@ if __name__ == '__main__':
         print('New sample updated.')
         # input(GREEN('Continue to train it? (Y/n)'))
         # rho, theta = Train(samples, K, theta)
-        rho, theta, err = TrainNg(samples, K, theta)
+        rho, theta, err = TrainNg(samples, K, theta, custom_gradient=False)
         print('Estimated scaling factor: %s' % rho)
         train_out.write('%s\n' % ' '.join([str(x) for x in rho]))
         train_rho.append(rho)
@@ -65,8 +65,8 @@ if __name__ == '__main__':
     #        0.14433757,  0.14433757,  0.14433757,  0.14433757,  0.14433757,  0.14433757]
 
     for i in range(len(train_rho)):
-        test_abs_out = open('output/test-abs-%d.log' % i, 'w')
-        test_rel_out = open('output/test-rel-%d.log' % i, 'w')
+        test_abs_out = open('output.train/test-abs-%d.log' % i, 'w')
+        test_rel_out = open('output.train/test-rel-%d.log' % i, 'w')
         print(YELLOW('='*25 + ' Predict: Cycle %d ' % i + '='*25))
         for name in tests:
             # print('Retrieved query from %s' % name)

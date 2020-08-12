@@ -3,6 +3,7 @@
 import os
 import sys
 import json
+import time
 
 import numpy as np
 
@@ -36,6 +37,8 @@ if __name__ == '__main__':
     rho, theta = None, None
 
     train_out = open('output/train.log', 'w')
+    train_time_out = open('output/train-time.log', 'w')
+    test_time_out = open('output/test-time.log', 'w')
     train_rho = []
     print(YELLOW('='*30 + ' Train ' + '='*30))
     for name in trains:
@@ -50,12 +53,16 @@ if __name__ == '__main__':
             samples.append({'flows': flows, 'rates': rates})
 
         print('New sample updated.')
-        rho, theta, err = TrainNg(samples, K, theta)
+        begin_time = time.time()
+        rho, theta, err = TrainNg(samples, K, theta, custom_gradient=False)
+        end_time = time.time()
+        train_time_out.write('%f\n' % (end_time - begin_time))
         print('Estimated scaling factor: %s' % rho)
         train_out.write('%s\n' % ' '.join([str(x) for x in rho]))
         train_rho.append(rho)
 
     train_out.close()
+    train_time_out.close()
 
     tests = ['test%d-%d-%d' % (K, j, i)
              for j in range(F, 2*F+1)
@@ -73,7 +80,10 @@ if __name__ == '__main__':
                 flows = json.load(open(flow_path))
                 rate_path = os.path.join(basedir, rate_file)
                 rates = np.array(open(rate_path).read().split(), dtype=float)/1e6
+                begin_time = time.time()
                 rates_esti = Predict(flows, rho, K=4)
+                end_time = time.time()
+                test_time_out.write('%f\n' % (end_time - begin_time))
                 abs_err = rates_esti - rates
                 rel_err = abs_err / rates
                 print(RED('Absolute error of prediction: %s' % (abs_err)))
@@ -83,4 +93,6 @@ if __name__ == '__main__':
 
         test_abs_out.close()
         test_rel_out.close()
+
+    test_time_out.close()
 

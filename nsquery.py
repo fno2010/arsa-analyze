@@ -26,9 +26,9 @@ if __name__ == '__main__':
     samples = []
     rho, theta = None, None
 
-    train_out = open('output/train.log', 'w')
-    train_time_out = open('output/train-time.log', 'w')
-    test_time_out = open('output/test-time.log', 'w')
+    train_out = open('output.query/train.log', 'w')
+    train_time_out = open('output.query/train-time.log', 'w')
+    test_time_out = open('output.query/test-time.log', 'w')
     train_rho = []
 
     for query in querydirs:
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
             print('New sample updated.')
             begin_time = time.time()
-            rho, theta, err = TrainNg(samples, K, theta)
+            rho, theta, err = TrainNg(samples, K, theta, custom_gradient=False)
             end_time = time.time()
             train_time_out.write('%f\n' % (end_time - begin_time))
             print('Estimated scaling factor: %s' % rho)
@@ -62,8 +62,8 @@ if __name__ == '__main__':
         tests = [f[:-5] for f in filelist if f.endswith('.json') and f.startswith('test')]
         tests.sort()
 
-        test_abs_out = open('output/abs-%s.log' % query, 'w')
-        test_rel_out = open('output/rel-%s.log' % query, 'w')
+        test_abs_out = open('output.query/abs-%s.log' % query, 'w')
+        test_rel_out = open('output.query/rel-%s.log' % query, 'w')
         print(YELLOW('='*30 + ' Predict ' + '='*30))
         for name in tests:
             print('Retrieved query from %s' % name)

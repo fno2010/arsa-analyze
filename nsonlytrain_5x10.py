@@ -25,8 +25,8 @@ if __name__ == '__main__':
     for i in range(len(querydirs)):
         samples = []
         rho, theta = None, None
-        train_out = open('output.onlytrain/train-%d.log' % i, 'w')
-        time_out = open('output.onlytrain/time-%d.log' % i, 'w')
+        train_out = open('output.onlytrain5x10/train-%d.log' % i, 'w')
+        time_out = open('output.onlytrain5x10/time-%d.log' % i, 'w')
 
         for query in querydirs[i:] + querydirs[:i]:
             filelist = os.listdir(os.path.join(basedir, query))

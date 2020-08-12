@@ -401,21 +401,25 @@ def ErrorJacNg(As, cs, alphas, p0, xs, p0_idxs=None, spherical=True):
     return dp
 
 def EstimateNg(As, cs, alphas, p0, xs, p0_idxs=None,
-               iter=100, tol=0.01, step=0.01*np.pi, spherical=True):
+               iter=100, tol=0.01, step=0.01*np.pi, spherical=True,
+               custom_gradient=True):
     S = len(As)
     p0_idxs = p0_idxs or [None] * S
     p0_bound = ([1e-6]*len(p0), [np.pi/2-1e-6]*len(p0))
 
     error_func = lambda p: ErrorFuncNg(As, cs, alphas, p, xs, p0_idxs, spherical)
     error_jac = lambda p: ErrorJacNg(As, cs, alphas, p, xs, p0_idxs, spherical)
-    res = least_squares(error_func, p0, jac=error_jac, bounds=p0_bound)
+    if custom_gradient:
+        res = least_squares(error_func, p0, jac=error_jac, bounds=p0_bound)
+    else:
+        res = least_squares(error_func, p0, bounds=p0_bound)
     p_esti = res.x
     err = res.cost
 
     # print('Final Result: ', p_esti, err)
     return p_esti, err
 
-def TrainNg(samples, K=4, theta=None):
+def TrainNg(samples, K=4, theta=None, custom_gradient=True):
     K2 = K//2
     K = K2*2
     RHO = K * K2 * K2 * 3
@@ -442,7 +446,7 @@ def TrainNg(samples, K=4, theta=None):
         xs.append(x)
         rho_idxs.append(rho_idx)
 
-    theta, err = EstimateNg(As, cs, alphas, theta, xs, p0_idxs=rho_idxs, step=0.001*np.pi)
+    theta, err = EstimateNg(As, cs, alphas, theta, xs, p0_idxs=rho_idxs, step=0.001*np.pi, custom_gradient=custom_gradient)
     print(RED('Total relative error = %s' % (err)))
     rho = Spherical2Cartesian(theta)
     return rho, theta, err
